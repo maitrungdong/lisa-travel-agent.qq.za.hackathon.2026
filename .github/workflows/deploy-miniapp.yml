@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: GitHub Environment (development | testing | production)
+        description: GitHub Environment (development | production)
         required: true
         type: string
       version-status:
@@ -30,7 +30,7 @@ on:
         description: Môi trường deploy
         required: true
         type: choice
-        options: [development, testing, production]
+        options: [development, production]
         default: development
       version-status:
         description: Version status trên Zalo

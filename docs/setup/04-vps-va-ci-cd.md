@@ -32,11 +32,13 @@ Persona Lisa: `infra/openclaw/workspace/AGENTS.md` (nhiệm vụ + cách gọi A
 
 ## 2. GitHub Environments, secrets & variables
 
-Tạo 3 Environments: `development`, `testing`, `production` (production bật **required reviewers**).
+Tạo 2 Environments: `development`, `production` (production bật **required reviewers**).
+
+> Lưu ý: `testing` trong `release.yml` là **Zalo version status** (bản đánh số, gửi xét duyệt được) — không phải GitHub Environment; release deploy bằng environment `production`.
 
 | Secret | Env | Dùng cho |
 |---|---|---|
-| `ZALO_APP_ID`, `ZMP_TOKEN` | cả 3 | Deploy mini app (`zmp-cli`) |
+| `ZALO_APP_ID`, `ZMP_TOKEN` | cả 2 | Deploy mini app (`zmp-cli`) |
 | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT` (optional) | development | SSH deploy API + infra |
 | `GHCR_PULL_TOKEN` | development | VPS pull image private từ GHCR (PAT scope `read:packages`; bỏ qua nếu package public) |
 

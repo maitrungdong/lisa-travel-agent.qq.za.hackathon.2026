@@ -15,7 +15,7 @@ Hành vi mặc định đã cấu hình trong `infra/openclaw/openclaw.json`:
 
 1. Vào [developers.zalo.me](https://developers.zalo.me) → tạo Mini App → lấy `APP_ID`.
 2. Lấy `ZMP_TOKEN` (JWT, **có hạn**): Công cụ → API Explorer → Lấy Access Token.
-3. Hai giá trị này đặt vào GitHub Environment secrets `ZALO_APP_ID` / `ZMP_TOKEN` (xem `04-vps-va-ci-cd.md`).
+3. Hai giá trị này đặt vào secrets `ZALO_APP_ID` / `ZMP_TOKEN` của cả 2 Environments (`development`, `production`) (xem `04-vps-va-ci-cd.md`).
 4. Token hết hạn → workflow `zmp-token-health.yml` tự mở issue nhắc rotate hàng tuần.
 
 Chi tiết cơ chế zmp-cli/token/version status: [`05-ci-cd-zalo-mini-app.md`](./05-ci-cd-zalo-mini-app.md).
