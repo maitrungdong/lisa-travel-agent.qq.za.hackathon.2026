@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* Design tokens kiểu shadcn — đổi màu ở đây là đổi cả app.
+   Palette: teal/emerald trẻ trung, nền sáng sạch. */
+:root {
+  --background: 210 20% 98%;
+  --foreground: 200 50% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 200 50% 10%;
+  --primary: 174 84% 26%;         /* teal-700 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 168 60% 94%;
+  --secondary-foreground: 174 84% 22%;
+  --muted: 210 20% 94%;
+  --muted-foreground: 210 10% 45%;
+  --accent: 38 92% 50%;           /* amber */
+  --accent-foreground: 24 60% 15%;
+  --destructive: 0 72% 51%;
+  --border: 210 16% 90%;
+  --ring: 174 84% 32%;
+  --radius: 1rem;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-border: hsl(var(--border));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 8px);
+}
+
+html, body { height: 100%; }
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* chừa chỗ cho notch/status bar trong webview Zalo */
+  padding-top: env(safe-area-inset-top);
+}

@@ -1,0 +1,5 @@
+# Caddy tự lo chứng chỉ Let's Encrypt cho {$DOMAIN}.
+# API public tại https://api.<domain> — mini app gọi vào đây.
+api.{$DOMAIN} {
+	reverse_proxy api:3000
+}

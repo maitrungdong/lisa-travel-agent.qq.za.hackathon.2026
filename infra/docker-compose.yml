@@ -1,0 +1,79 @@
+# Toàn bộ hệ thống chạy trên VPS bằng 1 file compose:
+#   caddy (HTTPS) → api (NestJS) → postgres
+#   openclaw (Lisa agent, kênh Zalo) — không expose ra internet
+#
+# Chạy: cp .env.example .env, điền giá trị, rồi `docker compose up -d`
+
+name: lisa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lisa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: lisa
+    # Chỉ bind loopback — từ máy dev dùng SSH tunnel để chạy db:push
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lisa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/OWNER/REPO/api:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgres://lisa:${POSTGRES_PASSWORD}@postgres:5432/lisa
+      CORS_ORIGINS: https://h5.zdn.vn
+      AGENT_API_KEY: ${AGENT_API_KEY:?set in .env}
+    expose:
+      - "3000"
+
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    restart: unless-stopped
+    # Gateway chỉ bind trong mạng nội bộ docker. Truy cập Control UI qua
+    # SSH tunnel: ssh -L 18789:127.0.0.1:18789 user@vps
+    ports:
+      - "127.0.0.1:18789:18789"
+    environment:
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?set in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set in .env}
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      # Agent gọi API nội bộ qua http://api:3000 với AGENT_API_KEY
+      LISA_API_BASE_URL: http://api:3000
+      LISA_API_KEY: ${AGENT_API_KEY}
+    volumes:
+      - ./openclaw:/home/node/.openclaw
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,18 @@
+{
+  "channels": {
+    "zalo": {
+      "enabled": true,
+      "accounts": {
+        "default": {
+          "name": "Lisa",
+          "dmPolicy": "pairing",
+          "groupPolicy": "open"
+        }
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "lan"
+  }
+}
