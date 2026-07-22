@@ -68,6 +68,8 @@ jobs:
             echo "::error::/opt/lisa/.env chưa tồn tại — SSH vào VPS, cp .env.example .env và điền giá trị."
             exit 1
           fi
+          # rsync chạy bằng root làm file đổi chủ — container openclaw chạy uid 1000
+          chown -R 1000:1000 /opt/lisa/openclaw
           docker compose up -d --remove-orphans
           # nạp lại persona Lisa
           docker compose restart openclaw
