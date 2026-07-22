@@ -1,0 +1,77 @@
+name: Release
+
+# Tag `v*` → deploy bản TESTING lên Zalo (được đánh số, lưu trong Quản lý
+# phiên bản, gửi xét duyệt được) + tạo GitHub Release kèm changelog.
+#
+# Vì sao dừng ở TESTING: `zmp deploy` không có khả năng publish ra người dùng
+# thật. Phát hành production bắt buộc qua xét duyệt của Zalo — thao tác trên
+# console developers.zalo.me (hoặc Partner Open API nếu đã ký hợp tác đối tác).
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify trước khi release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  deploy-testing:
+    name: Deploy bản testing
+    needs: verify
+    uses: ./.github/workflows/deploy-miniapp.yml
+    with:
+      environment: production
+      version-status: testing
+      description: "release ${{ github.ref_name }}"
+    secrets: inherit
+
+  github-release:
+    name: Tạo GitHub Release
+    needs: deploy-testing
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Sinh changelog từ tag trước
+        id: changelog
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || echo "")
+          if [ -z "$PREV" ]; then
+            RANGE="$GITHUB_REF_NAME"
+          else
+            RANGE="${PREV}..${GITHUB_REF_NAME}"
+          fi
+          echo "Range: $RANGE"
+          {
+            echo "body<<__EOF__"
+            git log --no-merges --pretty=format:'- %s (%h)' "$RANGE"
+            echo ""
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            ### Zalo Mini App
+            Bản **testing** đã lên Zalo (version: `${{ needs.deploy-testing.outputs.version }}`).
+            Vào developers.zalo.me > Quản lý phiên bản để gửi xét duyệt và phát hành.
+
+            ### Thay đổi
+            ${{ steps.changelog.outputs.body }}

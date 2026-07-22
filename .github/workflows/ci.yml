@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Push liên tiếp trên cùng 1 PR sẽ huỷ run cũ — tiết kiệm runner minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Xác định phần nào của monorepo thay đổi, để không build thừa.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      miniapp: ${{ steps.filter.outputs.miniapp }}
+      api: ${{ steps.filter.outputs.api }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            miniapp:
+              - 'apps/miniapp/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            shared:
+              - 'packages/**'
+              - '.github/**'
+              - 'scripts/**'
+
+  quality:
+    name: Lint · Typecheck · Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test -- --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  build-miniapp:
+    name: Build mini app
+    needs: changes
+    if: needs.changes.outputs.miniapp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-node-pnpm
+
+      # Build bằng biến giả để bắt lỗi compile-time. Giá trị thật được inject
+      # ở workflow deploy, không phải ở đây.
+      - name: Build
+        working-directory: apps/miniapp
+        env:
+          VITE_APP_ENV: ci
+          VITE_API_BASE_URL: https://api-ci.invalid
+        run: pnpm build
+
+      - name: Kiểm tra dung lượng bundle
+        env:
+          BUNDLE_DIR: apps/miniapp/www
+          MAX_BUNDLE_MB: "8"
+        run: node scripts/check-bundle-size.mjs
+
+      - name: Kiểm tra app-config.json hợp lệ
+        run: node -e "const c=require('./apps/miniapp/app-config.json'); if(!c.app?.title) { console.error('app-config.json thiếu app.title (bắt buộc)'); process.exit(1); } console.log('app-config.json OK');"
+
+  build-api:
+    name: Build API
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Build
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Docker build (không push)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/api
+          push: false
+          tags: qq-api:ci
+
+  # Job tổng hợp — đặt job NÀY làm required status check trong branch
+  # protection. Nhờ vậy khi thêm/bớt job con không phải sửa lại rule.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [quality, build-miniapp, build-api]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kiểm tra kết quả các job
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Kết quả: $results"
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::Có job thất bại."
+              exit 1
+            fi
+          done
+          echo "Tất cả job bắt buộc đã pass."

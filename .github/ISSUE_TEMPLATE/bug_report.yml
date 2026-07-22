@@ -1,0 +1,44 @@
+name: Bug report
+description: Báo lỗi trong mini app hoặc backend
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Khu vực
+      options:
+        - Mini App (UI trong Zalo)
+        - API / backend
+        - OA chat / webhook
+        - Thanh toán (ZaloPay)
+        - CI/CD
+        - Khác
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: Chuyện gì xảy ra
+      description: Mô tả lỗi và các bước tái hiện
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kỳ vọng
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Môi trường
+      placeholder: "development / testing / production — kèm version Zalo nếu là lỗi UI"
+
+  - type: input
+    id: device
+    attributes:
+      label: Thiết bị
+      placeholder: "iPhone 14 / iOS 17.4 / Zalo 24.x — bắt buộc nếu là lỗi trong mini app"

@@ -1,0 +1,121 @@
+name: Deploy Mini App (reusable)
+
+# Workflow này KHÔNG tự chạy. Nó được gọi lại (workflow_call) bởi
+# cd-development.yml và release.yml, hoặc chạy tay qua workflow_dispatch.
+# Toàn bộ logic build + upload lên Zalo tập trung ở đây → sửa 1 chỗ.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Environment (development | testing | production)
+        required: true
+        type: string
+      version-status:
+        description: development (ghi đè) | testing (đánh số, gửi xét duyệt được)
+        required: true
+        type: string
+      description:
+        description: Mô tả phiên bản
+        required: true
+        type: string
+    outputs:
+      version:
+        description: Version Zalo trả về
+        value: ${{ jobs.deploy.outputs.version }}
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Môi trường deploy
+        required: true
+        type: choice
+        options: [development, testing, production]
+        default: development
+      version-status:
+        description: Version status trên Zalo
+        required: true
+        type: choice
+        options: [development, testing]
+        default: development
+      description:
+        description: Mô tả phiên bản
+        required: true
+        type: string
+
+concurrency:
+  # Không cho 2 lần deploy cùng environment chạy song song — tránh race khi
+  # Zalo ghi đè bản development.
+  group: deploy-miniapp-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & deploy → ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.MINIAPP_URL }}
+    outputs:
+      version: ${{ steps.zmp.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      # Biến build-time lấy từ GitHub Environment.
+      # `vars.*` = giá trị công khai (URL, feature flag) — hiện rõ trong log.
+      # `secrets.*` = giá trị nhạy cảm — bị mask trong log.
+      # Lưu ý: mọi VITE_* đều nằm trong bundle client → chỉ đặt giá trị công khai.
+      - name: Build mini app
+        working-directory: apps/miniapp
+        env:
+          VITE_APP_ENV: ${{ inputs.environment }}
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          VITE_ZALO_OA_ID: ${{ vars.ZALO_OA_ID }}
+          VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          VITE_ENABLE_MOCK: ${{ vars.ENABLE_MOCK || 'false' }}
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: pnpm build
+
+      - name: Deploy lên Zalo
+        id: zmp
+        uses: ./.github/actions/zmp-deploy
+        with:
+          app-id: ${{ secrets.ZALO_APP_ID }}
+          zmp-token: ${{ secrets.ZMP_TOKEN }}
+          working-directory: apps/miniapp
+          output-dir: www
+          version-status: ${{ inputs.version-status }}
+          description: ${{ inputs.description }}
+          max-bundle-mb: ${{ vars.MAX_BUNDLE_MB || '8' }}
+
+      # Mọi giá trị do người dùng kiểm soát (mô tả phiên bản, commit message)
+      # đều đi qua `env:` chứ không nội suy thẳng vào `run:` — nếu không, một
+      # commit message chứa `$(...)` sẽ chạy được lệnh tuỳ ý trên runner.
+      - name: Ghi job summary
+        if: always()
+        env:
+          DEPLOY_ENV: ${{ inputs.environment }}
+          VERSION_STATUS: ${{ inputs.version-status }}
+          ZALO_VERSION: ${{ steps.zmp.outputs.version || 'n/a' }}
+          DEPLOY_DESC: ${{ inputs.description }}
+        run: |
+          {
+            echo "## Deploy Zalo Mini App"
+            echo ""
+            echo "| Trường | Giá trị |"
+            echo "| --- | --- |"
+            echo "| Environment | \`${DEPLOY_ENV}\` |"
+            echo "| Version status | \`${VERSION_STATUS}\` |"
+            echo "| Zalo version | \`${ZALO_VERSION}\` |"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo "| Mô tả | ${DEPLOY_DESC} |"
+            echo ""
+            echo "> Bản \`testing\` xuất hiện ở **Quản lý phiên bản** trên developers.zalo.me."
+            echo "> Publish ra người dùng thật vẫn phải gửi xét duyệt thủ công."
+          } >> "$GITHUB_STEP_SUMMARY"

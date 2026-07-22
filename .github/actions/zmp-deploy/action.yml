@@ -1,0 +1,79 @@
+name: Deploy Zalo Mini App
+description: >-
+  Nạp credential Zalo vào .env của project rồi chạy `zmp deploy` ở chế độ
+  non-interactive. Không dùng `zmp login` vì lệnh đó cần quét QR / nhập tay.
+
+inputs:
+  app-id:
+    description: Mini App ID (developers.zalo.me)
+    required: true
+  zmp-token:
+    description: Access token của developer account (JWT, có hạn dùng)
+    required: true
+  working-directory:
+    description: Thư mục gốc của Zalo Mini App (nơi chứa app-config.json)
+    required: false
+    default: apps/miniapp
+  output-dir:
+    description: Thư mục build output sẽ được upload lên Zalo
+    required: false
+    default: www
+  version-status:
+    description: development | testing
+    required: false
+    default: development
+  description:
+    description: Mô tả phiên bản hiển thị trong Quản lý phiên bản
+    required: true
+  zmp-cli-version:
+    description: Pin version của zmp-cli để build reproducible
+    required: false
+    default: 4.0.3
+  max-bundle-mb:
+    description: Ngưỡng cảnh báo dung lượng bundle (MB). 0 = tắt kiểm tra.
+    required: false
+    default: "8"
+
+outputs:
+  version:
+    description: Version string mà Zalo trả về (nếu parse được)
+    value: ${{ steps.deploy.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Kiểm tra token còn hạn
+      shell: bash
+      env:
+        ZMP_TOKEN: ${{ inputs.zmp-token }}
+      run: node "${GITHUB_ACTION_PATH}/../../../scripts/check-zmp-token.mjs"
+
+    - name: Kiểm tra dung lượng bundle
+      if: inputs.max-bundle-mb != '0'
+      shell: bash
+      env:
+        BUNDLE_DIR: ${{ inputs.working-directory }}/${{ inputs.output-dir }}
+        MAX_BUNDLE_MB: ${{ inputs.max-bundle-mb }}
+      run: node "${GITHUB_ACTION_PATH}/../../../scripts/check-bundle-size.mjs"
+
+    - name: Cài zmp-cli
+      shell: bash
+      run: npm install -g "zmp-cli@${{ inputs.zmp-cli-version }}"
+
+    - name: Deploy
+      id: deploy
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ZMP_APP_ID: ${{ inputs.app-id }}
+        ZMP_TOKEN: ${{ inputs.zmp-token }}
+        ZMP_OUTPUT_DIR: ${{ inputs.output-dir }}
+        ZMP_VERSION_STATUS: ${{ inputs.version-status }}
+        ZMP_DESCRIPTION: ${{ inputs.description }}
+      run: node "${GITHUB_ACTION_PATH}/../../../scripts/zmp-deploy.mjs"
+
+    - name: Dọn credential
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: rm -f .env

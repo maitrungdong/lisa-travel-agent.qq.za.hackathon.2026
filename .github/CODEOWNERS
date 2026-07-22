@@ -1,0 +1,18 @@
+# Ai bị request review tự động khi file trong path tương ứng thay đổi.
+# Thay <org>/<team> hoặc @username bằng thành viên thật của team.
+#
+# Kết hợp với branch protection ("Require review from Code Owners") thì đây là
+# cách rẻ nhất để không ai một mình sửa được pipeline hay credential.
+
+*                       @your-github-username
+
+/.github/               @your-github-username
+/scripts/               @your-github-username
+
+/apps/miniapp/          @your-github-username
+/apps/api/              @your-github-username
+/packages/              @your-github-username
+
+# File nhạy cảm — luôn cần review
+/.github/workflows/     @your-github-username
+/apps/miniapp/app-config.json  @your-github-username

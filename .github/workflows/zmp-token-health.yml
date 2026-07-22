@@ -1,0 +1,79 @@
+name: ZMP token health
+
+# Access token của Zalo là JWT có hạn. Khi hết hạn, `zmp deploy` fail với thông
+# báo mơ hồ ("Token Invalid!") — thường phát hiện đúng lúc cần deploy gấp.
+# Workflow này chạy định kỳ, kiểm tra hạn token của từng environment và tự mở
+# issue nhắc rotate trước khi chuyện đó xảy ra.
+
+on:
+  schedule:
+    - cron: "0 1 * * 1" # 08:00 giờ VN thứ Hai hàng tuần
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Kiểm tra token · ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    # Không dùng continue-on-error: nó biến job fail thành 'success' và job
+    # `report` sẽ không bao giờ chạy. fail-fast:false đã đủ để các environment
+    # còn lại vẫn được kiểm tra khi một cái hỏng.
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [development, testing, production]
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - id: check
+        env:
+          ZMP_TOKEN: ${{ secrets.ZMP_TOKEN }}
+          ZMP_TOKEN_WARN_DAYS: "14"
+        run: node scripts/check-zmp-token.mjs
+
+  report:
+    name: Mở issue nếu có token hỏng
+    needs: check
+    if: always() && needs.check.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Tạo hoặc cập nhật issue
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const title = 'ZMP_TOKEN hết hạn hoặc không hợp lệ';
+            const body = [
+              'Job kiểm tra token định kỳ phát hiện có environment với `ZMP_TOKEN` không dùng được.',
+              '',
+              'Cách xử lý:',
+              '1. Vào https://developers.zalo.me > Công cụ > API Explorer',
+              '2. Chọn đúng Zalo App tương ứng environment ở mục **Chọn ứng dụng**',
+              '3. Bấm **Lấy Access Token**',
+              '4. Settings > Environments > <environment> > cập nhật secret `ZMP_TOKEN`',
+              '',
+              `Chi tiết run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ci,credentials',
+            });
+            const found = existing.data.find((i) => i.title === title);
+
+            if (found) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: found.number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['ci', 'credentials'],
+              });
+            }

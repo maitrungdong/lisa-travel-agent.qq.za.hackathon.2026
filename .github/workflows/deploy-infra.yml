@@ -1,0 +1,75 @@
+name: CD · Infra (VPS)
+
+# Đồng bộ infra/ (compose, Caddyfile, persona Lisa) lên VPS rồi áp dụng.
+# KHÔNG đụng vào /opt/lisa/.env (secret nằm ngoài git) và state runtime
+# của OpenClaw.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/deploy-infra.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-infra
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync & apply
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Rsync infra lên VPS
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          RSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new -p ${PORT:-22}"
+          # 1) compose + Caddyfile + .env.example (không --delete, không đụng .env)
+          rsync -avz -e "$RSH" \
+            --exclude ".env" --exclude "openclaw" \
+            infra/ "$SSH_USER@$HOST:/opt/lisa/"
+          # 2) config + persona của Lisa (phần còn lại của openclaw/ là
+          #    runtime state do container ghi — không sync)
+          rsync -avz -e "$RSH" \
+            infra/openclaw/openclaw.json \
+            "$SSH_USER@$HOST:/opt/lisa/openclaw/openclaw.json"
+          rsync -avz -e "$RSH" \
+            infra/openclaw/workspace/ \
+            "$SSH_USER@$HOST:/opt/lisa/openclaw/workspace/"
+
+      - name: Áp dụng thay đổi
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new \
+              -p "${PORT:-22}" "$SSH_USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/lisa
+          if [ ! -f .env ]; then
+            echo "::error::/opt/lisa/.env chưa tồn tại — SSH vào VPS, cp .env.example .env và điền giá trị."
+            exit 1
+          fi
+          docker compose up -d --remove-orphans
+          # nạp lại persona Lisa
+          docker compose restart openclaw
+          REMOTE
+          rm -f /tmp/deploy_key

@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # Dependency của app. Gom nhóm minor/patch vào 1 PR để không ngập PR mỗi tuần.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    groups:
+      zalo-sdk:
+        patterns: ["zmp-*", "zaui*"]
+        # SDK Zalo cập nhật liên tục và hay breaking → tách riêng để review kỹ,
+        # KHÔNG gom chung với các update vặt.
+        update-types: ["minor", "patch"]
+      dev-dependencies:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      production-minor-patch:
+        dependency-type: production
+        exclude-patterns: ["zmp-*", "zaui*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Chính GitHub Actions cũng cần vá — action bị compromise là vector tấn công
+  # supply-chain thật. Ta pin action theo SHA nên Dependabot sẽ bump SHA giúp.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule:
+      interval: weekly
+    labels: ["dependencies"]

@@ -1,0 +1,134 @@
+name: CD · API
+
+# Backend (OA webhook + ZaloPay callback + BFF cho mini app).
+# Build image → push GHCR → deploy. GHCR đi kèm repo nên không phải quản lý
+# thêm credential registry: chỉ cần GITHUB_TOKEN với quyền packages: write.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [development, production]
+        default: development
+        required: true
+
+concurrency:
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+
+permissions:
+  contents: read
+
+jobs:
+  build-push:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+
+  deploy:
+    name: Deploy → ${{ inputs.environment || 'development' }}
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'development' }}
+      url: ${{ vars.API_BASE_URL }}
+    steps:
+      # Deploy lên VPS: SSH vào host, cập nhật API_IMAGE trong /opt/lisa/.env
+      # rồi docker compose pull + up. Image được pin theo commit SHA (immutable)
+      # → rollback = re-run workflow ở commit cũ.
+      #
+      # Secrets cần có (Settings → Environments → <env> → Secrets):
+      #   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), VPS_PORT (optional)
+      #   GHCR_PULL_TOKEN (PAT chỉ có scope read:packages — để VPS pull image
+      #   private; bỏ qua nếu package để public)
+      - name: Deploy qua SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/api:sha-${GITHUB_SHA}"
+          echo "Deploying $IMAGE"
+          printf '%s\n' "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new \
+              -p "${PORT:-22}" "$SSH_USER@$HOST" \
+              "GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' IMAGE='$IMAGE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/lisa
+          if [ -n "${GHCR_TOKEN:-}" ]; then
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          fi
+          sed -i "s|^API_IMAGE=.*|API_IMAGE=$IMAGE|" .env
+          docker compose pull api
+          docker compose up -d api
+          docker image prune -f
+          REMOTE
+          rm -f /tmp/deploy_key
+
+      - name: Smoke test
+        if: vars.API_BASE_URL != ''
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 10 "${API_BASE_URL}/health"; then
+              echo "Health check OK"
+              exit 0
+            fi
+            echo "Lần $i thất bại, thử lại sau 10s..."
+            sleep 10
+          done
+          echo "::error::Health check thất bại sau 5 lần thử."
+          exit 1

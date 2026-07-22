@@ -1,0 +1,27 @@
+name: CD · Development
+
+# Mỗi commit vào main → deploy bản DEVELOPMENT lên Zalo.
+# Bản development bị ghi đè mỗi lần deploy và không hiện trong Quản lý phiên bản
+# → hoàn hảo cho vòng lặp "merge xong quét QR xem ngay trên điện thoại".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/miniapp/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/cd-development.yml"
+      - ".github/workflows/deploy-miniapp.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-dev:
+    uses: ./.github/workflows/deploy-miniapp.yml
+    with:
+      environment: development
+      version-status: development
+      description: "dev · ${{ github.sha }} · ${{ github.event.head_commit.message }}"
+    secrets: inherit
