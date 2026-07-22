@@ -1,0 +1,36 @@
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Editor / IDE ----
+.vscode/
+.idea/
+*.swp
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+*.local
+
+# ---- Node ----
+node_modules/
+dist/
+*.log
+.pnpm-store/
+*.tsbuildinfo
+coverage/
+tmp/
+.cache/
+
+# ---- Zalo Mini App ----
+# zmp-cli ghi APP_ID và ZMP_TOKEN vào .env ở project root (đã cover ở mục Env).
+www/          # build output của mini app (Vite outDir)
+.zmp/
+
+# ---- OpenClaw runtime state (chỉ commit config + persona) ----
+infra/openclaw/**
+!infra/openclaw/openclaw.json
+!infra/openclaw/workspace/
+!infra/openclaw/workspace/AGENTS.md
+!infra/openclaw/workspace/SOUL.md

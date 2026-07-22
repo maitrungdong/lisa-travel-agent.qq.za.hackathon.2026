@@ -1,0 +1,23 @@
+{
+  "name": "wiwi-za-hackathon-2026",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev:miniapp": "pnpm --filter miniapp dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "vitest run",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:push": "pnpm --filter api db:push"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^9.39.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  }
+}
