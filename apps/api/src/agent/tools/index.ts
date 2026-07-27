@@ -143,13 +143,27 @@ export const allTools: ToolDef[] = [
 
 export const toolMap = new Map(allTools.map((t) => [t.name, t]));
 
-/** Định dạng cho Messages API. `strict: true` ép model sinh input đúng schema. */
+/**
+ * Định dạng cho Messages API.
+ *
+ * ⚠ KHÔNG bật `strict: true`. Đã thử và API trả 400:
+ *   "Schema is too complex for compilation. Try reducing the number of tools
+ *    or simplifying tool schemas."
+ * Strict mode dùng grammar-constrained sampling, chi phí biên dịch tăng theo
+ * tổng độ phức tạp của TẤT CẢ schema — 16 tool là quá ngưỡng.
+ *
+ * Đánh đổi chấp nhận được: mất bảo đảm ở tầng sampling, nhưng schema vẫn được
+ * gửi cho model và mọi tool đều tự validate input trong handler rồi trả
+ * {ok:false, hint} khi sai — model đọc hint và gọi lại cho đúng.
+ *
+ * Nếu sau này thật sự cần strict cho một tool nào đó, bật riêng lẻ cho tool đó
+ * chứ đừng bật cả loạt.
+ */
 export function toolsForApi() {
   return allTools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: t.input_schema,
-    strict: true as const
+    input_schema: t.input_schema
   }));
 }
 
