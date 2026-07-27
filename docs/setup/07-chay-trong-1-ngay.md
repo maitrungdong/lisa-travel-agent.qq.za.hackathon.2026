@@ -17,7 +17,7 @@ Thông tin cố định:
 ## Bước 0 — Chuẩn bị ở máy dev (5 phút)
 
 ```bash
-cd projects/lisa-travel-agent
+# (ở máy dev, trong monorepo thì là projects/lisa-travel-agent)
 
 # Sinh 3 khoá bí mật, chép ra chỗ nào đó, lát nữa dán vào .env trên VPS
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
@@ -35,9 +35,13 @@ Chuẩn bị sẵn 2 thứ nữa: **`ZALO_BOT_TOKEN`** (Zalo Bot Manager → bot
 ```bash
 ssh -p 2222 zah19-team35@118.102.2.135
 
-git clone <repo-url> ~/lisa && cd ~/lisa/projects/lisa-travel-agent
+git clone https://github.com/maitrungdong/lisa-travel-agent.qq.za.hackathon.2026 ~/lisa
+cd ~/lisa
 bash scripts/vps-bootstrap.sh
 ```
+
+> ⚠️ `lisa-travel-agent` là repo ĐỘC LẬP, không phải thư mục con của monorepo.
+> Sau khi clone, gốc repo nằm thẳng ở `~/lisa` — **không có** `~/lisa/projects/...`.
 
 Script làm 6 việc: đổi timezone → `Asia/Ho_Chi_Minh`, cài Docker CE, cài rsync,
 tạo `/opt/lisa/{media,recap}`, cài `lisa.conf` vào nginx rồi **reload nóng**, mở firewalld.
@@ -61,19 +65,39 @@ ls -ld /opt/lisa/media /opt/lisa/recap # owner 1000:1000
 
 ```bash
 sudo mkdir -p /opt/lisa && sudo chown $USER /opt/lisa
-cp infra/docker-compose.yml infra/.env.example /opt/lisa/
-cd /opt/lisa && cp .env.example .env && vi .env
+cp ~/lisa/infra/docker-compose.yml ~/lisa/infra/.env.example /opt/lisa/
 ```
 
-Điền đủ 7 biến: `POSTGRES_PASSWORD`, `API_IMAGE`, `AGENT_API_KEY`, `ZALO_BOT_TOKEN`,
-`ZALO_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`.
+Build image tại chỗ — không cần GHCR, không cần đăng nhập registry:
 
-> `API_IMAGE`: nếu CI chưa push được lên GHCR, build thẳng trên VPS:
-> ```bash
-> cd ~/lisa/projects/lisa-travel-agent/apps/api
-> docker build -t lisa-api:local .
-> # rồi đặt API_IMAGE=lisa-api:local trong .env
-> ```
+```bash
+cd ~/lisa/apps/api && docker build -t lisa-api:local .
+```
+
+Rồi tạo `.env` bằng heredoc. **Không dùng vi/nano** — dán 1 khối, ít sai hơn:
+
+```bash
+cd /opt/lisa
+cat > .env <<'EOF'
+POSTGRES_PASSWORD=
+API_IMAGE=lisa-api:local
+AGENT_API_KEY=
+ZALO_BOT_TOKEN=
+ZALO_WEBHOOK_SECRET=
+ANTHROPIC_API_KEY=
+PUBLIC_BASE_URL=https://zah19-team35.123c.vn
+CORS_ORIGINS=https://h5.zdn.vn,https://zah19-team35.123c.vn
+EOF
+```
+
+> Điền giá trị vào TRƯỚC KHI paste. `<<'EOF'` có nháy đơn nên bash không diễn giải
+> `$`, `!`, backtick trong token — quan trọng vì token Zalo hay chứa ký tự lạ.
+
+Kiểm tra không biến nào rỗng:
+
+```bash
+grep -E '^[A-Z_]+=$' .env && echo "⚠️ CÒN BIẾN RỖNG" || echo "✅ đã điền đủ"
+```
 
 ```bash
 cd /opt/lisa && docker compose up -d

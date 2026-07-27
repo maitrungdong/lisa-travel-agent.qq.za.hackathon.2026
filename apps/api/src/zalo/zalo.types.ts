@@ -81,6 +81,29 @@ export interface InboundMessage {
   raw: unknown;
 }
 
+/**
+ * Zalo trả `chat_type` VIẾT HOA: "PRIVATE" | "GROUP" (không phải "direct"/"group"
+ * như tài liệu cộng đồng ghi). So sánh phải case-insensitive, nếu không chat nhóm
+ * bị nhận nhầm thành 1-1 — lỗi im lặng, không có exception nào báo.
+ */
+function normalizeChatType(raw: string | undefined): "group" | "direct" {
+  return (raw ?? "").toUpperCase().includes("GROUP") ? "group" : "direct";
+}
+
+/**
+ * `message.date` của Zalo là MILI-GIÂY (vd 1785176102088), khác Telegram (giây).
+ * Nhân 1000 sẽ ra năm 05xxxx và Postgres từ chối insert.
+ * Dùng ngưỡng 1e11 để nhận diện đơn vị thay vì tin vào tài liệu.
+ */
+function normalizeTimestamp(raw: number | undefined): Date {
+  if (!raw || !Number.isFinite(raw)) return new Date();
+  const ms = raw > 1e11 ? raw : raw * 1000;
+  const d = new Date(ms);
+  // Chặn giá trị vô lý (lệch >1 năm so với hiện tại) — thà dùng giờ máy còn hơn hỏng DB
+  const drift = Math.abs(d.getTime() - Date.now());
+  return Number.isNaN(d.getTime()) || drift > 365 * 86_400_000 ? new Date() : d;
+}
+
 /** Chuẩn hoá payload webhook → InboundMessage. Trả null nếu không dùng được. */
 export function normalizeUpdate(update: ZaloUpdate): InboundMessage | null {
   const m = update.message;
@@ -92,14 +115,14 @@ export function normalizeUpdate(update: ZaloUpdate): InboundMessage | null {
   return {
     zaloMessageId: m.message_id,
     chatId: m.chat.id,
-    chatType: m.chat.chat_type === "group" ? "group" : "direct",
+    chatType: normalizeChatType(m.chat.chat_type),
     senderZaloId: m.from?.id ?? m.chat.id,
     senderName: m.from?.display_name?.trim() || "Bạn",
     text: m.text?.trim() || null,
     photoUrl: m.photo_url || null,
     stickerId: m.sticker || null,
     eventName: update.event_name ?? "message.text.received",
-    sentAt: m.date ? new Date(m.date * 1000) : new Date(),
+    sentAt: normalizeTimestamp(m.date),
     raw: update
   };
 }
