@@ -30,7 +30,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync, appendFileSync, readdirSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync, appendFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const {
@@ -67,7 +67,19 @@ if (!existsSync(outDir) || readdirSync(outDir).length === 0) {
 }
 
 // zmp-cli đọc credential từ .env ở project root.
-writeFileSync(".env", `APP_ID=${ZMP_APP_ID}\nZMP_TOKEN=${ZMP_TOKEN}\n`, { mode: 0o600 });
+//
+// ⚠ Cùng file .env này Vite cũng dùng cho các biến VITE_*. Ghi đè trắng sẽ xoá
+// VITE_API_BASE_URL — lần build sau im lặng trỏ về URL trong .env.example.
+// Nên giữ lại mọi dòng KHÔNG phải credential, chỉ thay APP_ID/ZMP_TOKEN.
+const keep = existsSync(".env")
+  ? readFileSync(".env", "utf8")
+      .split("\n")
+      .filter((l) => l.trim() && !/^\s*(APP_ID|ZMP_TOKEN)\s*=/.test(l))
+  : [];
+
+writeFileSync(".env", [`APP_ID=${ZMP_APP_ID}`, `ZMP_TOKEN=${ZMP_TOKEN}`, ...keep, ""].join("\n"), {
+  mode: 0o600
+});
 
 const args = ["deploy", "--passive", "--existing", "--outputDir", ZMP_OUTPUT_DIR, "--desc", ZMP_DESCRIPTION];
 if (status === "testing") args.push("--testing");

@@ -1,0 +1,12 @@
+{
+    "app": {
+        "title": "Lisa – Trợ lý du lịch",
+        "headerTitle": "Lisa",
+        "headerColor": "#0f766e",
+        "textColor": "white",
+        "statusBar": "transparent"
+    },
+    "listCSS": ["assets/app.css"],
+    "listSyncJS": ["assets/app.js"],
+    "listAsyncJS": []
+}
