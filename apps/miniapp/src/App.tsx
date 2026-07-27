@@ -2,6 +2,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/bottom-nav";
 import ExpensesPage from "./pages/expenses";
 import GalleryPage from "./pages/gallery";
+import HandoffPage from "./pages/handoff";
 import HomePage from "./pages/home";
 import ItineraryPage from "./pages/itinerary";
 
@@ -16,6 +17,8 @@ export default function App() {
           <Route path="/itinerary" element={<ItineraryPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
+          {/* Concierge Handoff — Lisa soạn tin, user bấm gửi sang OA đối tác */}
+          <Route path="/handoff" element={<HandoffPage />} />
         </Routes>
       </main>
       <BottomNav />
