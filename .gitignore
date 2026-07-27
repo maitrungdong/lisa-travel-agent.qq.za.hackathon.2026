@@ -34,3 +34,12 @@ infra/openclaw/**
 !infra/openclaw/workspace/
 !infra/openclaw/workspace/AGENTS.md
 !infra/openclaw/workspace/SOUL.md
+
+# ---- OpenClaw chạy local (infra/openclaw-local) ----
+infra/openclaw-local/state/
+
+# ---- Báo cáo scan VPS (chứa hostname/IP/cấu hình SSH — không đưa lên repo) ----
+vps-report.txt
+
+# ---- OpenClaw local: đã bỏ khỏi kiến trúc, không commit ----
+infra/openclaw-local/

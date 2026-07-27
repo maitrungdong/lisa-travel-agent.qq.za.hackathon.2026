@@ -1,8 +1,20 @@
-# Toàn bộ hệ thống chạy trên VPS bằng 1 file compose:
-#   caddy (HTTPS) → api (NestJS) → postgres
-#   openclaw (Lisa agent, kênh Zalo) — không expose ra internet
-#
-# Chạy: cp .env.example .env, điền giá trị, rồi `docker compose up -d`
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ Stack Lisa trên VPS — CHỈ 2 service: postgres + api.                      │
+# │                                                                          │
+# │ KHÔNG có caddy, KHÔNG có openclaw. Lý do:                                │
+# │  • nginx của BTC đang giữ 80/443 với wildcard cert *.123c.vn → mình chỉ  │
+# │    THÊM 1 file conf (infra/nginx/lisa.conf), không dựng reverse proxy #2. │
+# │  • Toàn bộ logic agent (webhook Zalo + worker + tool) nằm trong api.     │
+# │                                                                          │
+# │ Luồng vào:                                                               │
+# │   Internet :443 → nginx (BTC) ├─ /zalo/  → 127.0.0.1:3000  (webhook)     │
+# │                               ├─ /api/   → 127.0.0.1:3000  (BFF Mini App)│
+# │                               ├─ /media/ → /opt/lisa/media (ảnh)         │
+# │                               └─ /trip/  → /opt/lisa/recap (trang recap) │
+# │                                                                          │
+# │ Chạy trên VPS:                                                           │
+# │   cd /opt/lisa && cp .env.example .env && vi .env && docker compose up -d │
+# └──────────────────────────────────────────────────────────────────────────┘
 
 name: lisa
 
@@ -12,68 +24,75 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: lisa
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: lisa
-    # Chỉ bind loopback — từ máy dev dùng SSH tunnel để chạy db:push
+      # Giờ VN cho cả server DB — reminder/lịch trình phụ thuộc trực tiếp vào đây
+      TZ: Asia/Ho_Chi_Minh
+      PGTZ: Asia/Ho_Chi_Minh
+    # Chỉ bind loopback. Từ máy dev chạy migration qua SSH tunnel (scripts/deploy.sh lo).
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lisa"]
+      test: ["CMD-SHELL", "pg_isready -U lisa -d lisa"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   api:
-    image: ${API_IMAGE:-ghcr.io/OWNER/REPO/api:latest}
+    # Image do .github/workflows/deploy-api.yml build & push lên GHCR.
+    image: ${API_IMAGE:?thiếu API_IMAGE trong .env}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+    # Bind loopback — nginx của BTC proxy vào đây. KHÔNG expose ra 0.0.0.0,
+    # nếu không sẽ lộ API trần (không TLS) ra internet qua http://IP:3000.
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       PORT: "3000"
+      # Giờ VN — để mặc định (UTC/EDT) là mọi reminder lệch 7–11 tiếng
+      TZ: Asia/Ho_Chi_Minh
       DATABASE_URL: postgres://lisa:${POSTGRES_PASSWORD}@postgres:5432/lisa
-      CORS_ORIGINS: https://h5.zdn.vn
-      AGENT_API_KEY: ${AGENT_API_KEY:?set in .env}
-    expose:
-      - "3000"
-
-  openclaw:
-    image: ghcr.io/openclaw/openclaw:latest
-    restart: unless-stopped
-    # Gateway chỉ bind trong mạng nội bộ docker. Truy cập Control UI qua
-    # SSH tunnel: ssh -L 18789:127.0.0.1:18789 user@vps
-    ports:
-      - "127.0.0.1:18789:18789"
-    environment:
-      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?set in .env}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set in .env}
-      OPENCLAW_DISABLE_BONJOUR: "1"
-      # Agent gọi API nội bộ qua http://api:3000 với AGENT_API_KEY
-      LISA_API_BASE_URL: http://api:3000
-      LISA_API_KEY: ${AGENT_API_KEY}
+      # Origin được phép gọi /api/ từ trình duyệt (Mini App chạy trên h5.zdn.vn)
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://h5.zdn.vn}
+      # Bảo vệ các endpoint ghi dữ liệu (worker/agent gọi nội bộ)
+      AGENT_API_KEY: ${AGENT_API_KEY:?thiếu AGENT_API_KEY trong .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?thiếu ANTHROPIC_API_KEY trong .env}
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?thiếu ZALO_BOT_TOKEN trong .env}
+      # Zalo gửi kèm header X-Bot-Api-Secret-Token = đúng giá trị này ở mỗi webhook
+      ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:?thiếu ZALO_WEBHOOK_SECRET trong .env}
+      # Dùng để dựng URL công khai cho ảnh (sendPhoto cần URL public) và link recap
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://zah19-team35.123c.vn}
+      # Đường dẫn TRONG container; nginx serve lại từ thư mục host (xem volumes)
+      MEDIA_DIR: /data/media
+      RECAP_DIR: /data/recap
     volumes:
-      - ./openclaw:/home/node/.openclaw
-    depends_on:
-      - api
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?set in .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api
+      # Host → container. nginx đọc thẳng thư mục host để serve /media/ và /trip/.
+      # Container chạy user `node` (uid 1000) — trùng uid của user zah19-team35 trên
+      # VPS, nên vps-bootstrap.sh chown 1000:1000 là cả 2 phía cùng ghi/đọc được.
+      # (SELinux đang Permissive nên không cần cờ ':z'; nếu bật Enforcing thì thêm ':z')
+      - ${MEDIA_HOST_DIR:-/opt/lisa/media}:/data/media
+      - ${RECAP_HOST_DIR:-/opt/lisa/recap}:/data/recap
+    healthcheck:
+      # Image node:20-alpine không có curl → dùng fetch có sẵn của Node 20
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      # Chặn log ăn hết 35GB disk trong ngày demo
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:

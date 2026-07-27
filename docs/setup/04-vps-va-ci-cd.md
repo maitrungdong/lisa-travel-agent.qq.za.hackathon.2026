@@ -4,6 +4,8 @@
 
 Yêu cầu: VPS Ubuntu ≥ 2GB RAM, domain đã trỏ `A` record (`api.<domain>`) về IP VPS.
 
+> Mới nhận VPS? Chạy `scripts/vps-inspect.sh` và làm theo [`06-verify-vps.md`](./06-verify-vps.md) trước — kiểm tra RAM/disk/port/egress, tránh bootstrap rồi mới phát hiện thiếu.
+
 ```bash
 # 1. Trên VPS: cài Docker, mở firewall, tạo /opt/lisa
 bash scripts/vps-bootstrap.sh   # scp lên rồi chạy

@@ -9,5 +9,6 @@ Bộ tài liệu tham chiếu để dựng, chạy và deploy toàn bộ hệ th
 | [`03-tai-nguyen-zalo.md`](./03-tai-nguyen-zalo.md) | Tạo bot Zalo, Mini App, API key — các bước làm 1 lần |
 | [`04-vps-va-ci-cd.md`](./04-vps-va-ci-cd.md) | Bootstrap VPS, GitHub secrets, full flow CI/CD, checklist demo |
 | [`05-ci-cd-zalo-mini-app.md`](./05-ci-cd-zalo-mini-app.md) | Deep-dive CI/CD Zalo Mini App: zmp-cli, token, version status (thiết kế chuẩn production) |
+| [`06-verify-vps.md`](./06-verify-vps.md) | Vừa nhận VPS từ BTC: recon + verify đủ điều kiện trước khi bootstrap |
 
-Đường tắt: mới clone repo → đọc `02`; chuẩn bị demo → checklist cuối `04`.
+Đường tắt: mới clone repo → đọc `02`; vừa được cấp VPS → `06` rồi `04`; chuẩn bị demo → checklist cuối `04`.
