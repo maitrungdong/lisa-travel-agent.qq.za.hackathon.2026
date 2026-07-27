@@ -15,6 +15,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY drizzle.config.ts ./
 COPY src/db/schema.ts ./src/db/schema.ts
+# tsc không copy file .sql sang dist → phải copy tay. App đọc nó lúc boot để
+# đồng bộ schema (xem DatabaseModule.onApplicationBootstrap).
+COPY src/db/bootstrap.sql ./dist/db/bootstrap.sql
 EXPOSE 3000
 USER node
 CMD ["node", "dist/main.js"]
