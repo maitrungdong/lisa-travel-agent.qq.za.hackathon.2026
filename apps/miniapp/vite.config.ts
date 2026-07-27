@@ -9,6 +9,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     outDir: "www",
+    // Gộp toàn bộ CSS thành MỘT file thay vì tách theo chunk — app-config.json
+    // khai báo tĩnh nên càng ít file càng ít chỗ lệch.
+    cssCodeSplit: false,
     // `zmp deploy --existing` nạp asset theo danh sách khai trong app-config.json
     // (listSyncJS / listCSS) chứ không đọc index.html. Hai hệ quả:
     //

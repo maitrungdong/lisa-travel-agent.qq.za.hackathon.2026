@@ -82,6 +82,28 @@ jobs:
           VITE_BUILD_SHA: ${{ github.sha }}
         run: pnpm build
 
+      # `zmp deploy --existing` KHÔNG đọc index.html — nó nạp asset theo danh
+      # sách khai trong app-config.json. Không đồng bộ bước này thì khai báo
+      # lệch với file thật, Zalo nạp file không tồn tại → MÀN TRẮNG, mà lỗi
+      # chỉ lộ ra sau khi deploy xong chứ không phải lúc build.
+      - name: Đồng bộ app-config.json theo asset thực tế
+        working-directory: apps/miniapp
+        run: node "$GITHUB_WORKSPACE/scripts/sync-app-config.mjs"
+
+      # Chặn tại CI thay vì để phát hiện trên điện thoại.
+      - name: Kiểm tra app-config.json khớp với www/
+        working-directory: apps/miniapp
+        run: |
+          node -e '
+            const { readFileSync, existsSync } = require("fs");
+            const c = JSON.parse(readFileSync("app-config.json", "utf8"));
+            const declared = [...(c.listSyncJS ?? []), ...(c.listCSS ?? []), ...(c.listAsyncJS ?? [])];
+            if (declared.length === 0) throw new Error("app-config.json không khai asset nào — zmp sẽ từ chối deploy.");
+            const missing = declared.filter((f) => !existsSync("www/" + f));
+            if (missing.length) throw new Error("Khai báo trỏ vào file không tồn tại: " + missing.join(", "));
+            console.log("✅ " + declared.length + " asset khớp: " + declared.join(", "));
+          '
+
       - name: Deploy lên Zalo
         id: zmp
         uses: ./.github/actions/zmp-deploy
@@ -94,6 +116,26 @@ jobs:
           description: ${{ inputs.description }}
           max-bundle-mb: ${{ vars.MAX_BUNDLE_MB || '8' }}
 
+      # QR để quét mở app ngay từ trang kết quả workflow, khỏi phải gõ URL.
+      # Nhúng thẳng SVG dạng data-URI vào job summary — không phụ thuộc dịch vụ
+      # sinh QR bên ngoài (chúng hay chết, và gửi URL nội bộ ra ngoài là không cần thiết).
+      - name: Dựng QR mở Mini App
+        id: qr
+        if: success()
+        env:
+          APP_ID: ${{ secrets.ZALO_APP_ID }}
+        run: |
+          npm install --no-save --no-audit --no-fund qrcode@1.5.4 >/dev/null 2>&1
+          node -e '
+            const QRCode = require("qrcode");
+            const url = `https://zalo.me/s/${process.env.APP_ID}/`;
+            QRCode.toString(url, { type: "svg", margin: 1, width: 260 }).then((svg) => {
+              const uri = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+              require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
+              require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `qr=${uri}\n`);
+            });
+          '
+
       # Mọi giá trị do người dùng kiểm soát (mô tả phiên bản, commit message)
       # đều đi qua `env:` chứ không nội suy thẳng vào `run:` — nếu không, một
       # commit message chứa `$(...)` sẽ chạy được lệnh tuỳ ý trên runner.
@@ -104,18 +146,32 @@ jobs:
           VERSION_STATUS: ${{ inputs.version-status }}
           ZALO_VERSION: ${{ steps.zmp.outputs.version || 'n/a' }}
           DEPLOY_DESC: ${{ inputs.description }}
+          APP_URL: ${{ steps.qr.outputs.url }}
+          QR_DATA_URI: ${{ steps.qr.outputs.qr }}
+          API_URL: ${{ vars.API_BASE_URL }}
         run: |
           {
             echo "## Deploy Zalo Mini App"
             echo ""
+            if [ -n "${APP_URL}" ]; then
+              echo "### Quét để mở app"
+              echo ""
+              echo "<img src=\"${QR_DATA_URI}\" width=\"220\" alt=\"QR mở Mini App\" />"
+              echo ""
+              echo "[${APP_URL}](${APP_URL})"
+              echo ""
+            fi
             echo "| Trường | Giá trị |"
             echo "| --- | --- |"
             echo "| Environment | \`${DEPLOY_ENV}\` |"
             echo "| Version status | \`${VERSION_STATUS}\` |"
             echo "| Zalo version | \`${ZALO_VERSION}\` |"
+            echo "| API | \`${API_URL:-n/a}\` |"
             echo "| Commit | \`${GITHUB_SHA}\` |"
             echo "| Mô tả | ${DEPLOY_DESC} |"
             echo ""
             echo "> Bản \`testing\` xuất hiện ở **Quản lý phiên bản** trên developers.zalo.me."
             echo "> Publish ra người dùng thật vẫn phải gửi xét duyệt thủ công."
+            echo ">"
+            echo "> \`openChat\` chỉ chạy trong app Zalo thật — test màn Handoff bằng điện thoại."
           } >> "$GITHUB_STEP_SUMMARY"

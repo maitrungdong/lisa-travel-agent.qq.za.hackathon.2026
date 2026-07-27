@@ -6,7 +6,11 @@
     "textColor": "white",
     "statusBar": "transparent"
   },
-  "listCSS": ["assets/app.css"],
-  "listSyncJS": ["assets/app.js"],
+  "listCSS": [
+    "assets/app.css"
+  ],
+  "listSyncJS": [
+    "assets/app.js"
+  ],
   "listAsyncJS": []
 }

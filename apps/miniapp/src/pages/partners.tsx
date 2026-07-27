@@ -26,6 +26,8 @@ export default function PartnersPage() {
   const [trip, setTrip] = useState<FullTrip | null>(null);
   const [category, setCategory] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  /** true = không có đối tác ở điểm đến, đang hiện toàn mạng lưới */
+  const [fellBack, setFellBack] = useState(false);
 
   useEffect(() => {
     resolveActiveTrip()
@@ -35,12 +37,38 @@ export default function PartnersPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+
+    const city = trip?.trip.destination;
+    const cat = category || undefined;
+
+    // Lọc theo điểm đến trước. Không có gì thì LÙI VỀ toàn mạng lưới —
+    // thà gợi ý chỗ khác còn hơn để user nhìn màn trống và tưởng app hỏng.
     api
-      .partners({ city: trip?.trip.destination, category: category || undefined })
-      .then(setPartners)
-      .catch(() => setPartners([]))
-      .finally(() => setLoading(false));
+      .partners({ city, category: cat })
+      .then(async (rows) => {
+        if (rows.length > 0 || !city) return { rows, fellBack: false };
+        const all = await api.partners({ category: cat });
+        return { rows: all, fellBack: all.length > 0 };
+      })
+      .then(({ rows, fellBack }) => {
+        if (cancelled) return;
+        setPartners(rows);
+        setFellBack(fellBack);
+      })
+      .catch(() => {
+        if (!cancelled) setPartners([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    // Chuyến đi tải xong sẽ chạy lại effect này — huỷ lượt cũ để tránh
+    // kết quả về muộn ghi đè kết quả mới (đúng cái gây "nháy 1 phát rồi mất")
+    return () => {
+      cancelled = true;
+    };
   }, [trip, category]);
 
   /**
@@ -91,7 +119,11 @@ Cảm ơn shop nhiều ạ!`;
       <header>
         <h1 className="text-lg font-bold">Đối tác</h1>
         <p className="text-sm text-muted-foreground">
-          {trip ? `Gợi ý cho ${trip.trip.destination}` : "Mạng lưới OA du lịch của Lisa"}
+          {fellBack
+            ? `Chưa có đối tác ở ${trip?.trip.destination} — đây là toàn mạng lưới`
+            : trip
+              ? `Gợi ý cho ${trip.trip.destination}`
+              : "Mạng lưới OA du lịch của Lisa"}
         </p>
       </header>
 
