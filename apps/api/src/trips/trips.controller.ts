@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards
+  BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards
 } from "@nestjs/common";
 import type { ZodType } from "zod";
 import { AgentKeyGuard } from "../common/agent-key.guard";
@@ -65,5 +65,54 @@ export class TripsController {
   @UseGuards(AgentKeyGuard)
   createActivity(@Param("id", ParseIntPipe) id: number, @Body() body: unknown) {
     return this.trips.createActivity(id, parse(createActivitySchema, body));
+  }
+
+  /* ===================== BFF cho Mini App (chỉ đọc) ===================== */
+
+  /** Gộp mọi thứ của 1 chuyến đi vào 1 request — Mini App chạy trong webview,
+   *  mỗi round-trip trên 3G đều thấy rõ. */
+  @Get(":id/full")
+  full(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.fullTrip(id);
+  }
+
+  @Get(":id/photos")
+  listPhotos(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.listPhotos(id);
+  }
+
+  @Get(":id/notes")
+  listNotes(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.listNotes(id);
+  }
+
+  @Get(":id/members")
+  listMembers(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.listMembers(id);
+  }
+
+  /** Dùng chung hàm settleExpenses với tool của agent — một nguồn sự thật. */
+  @Get(":id/settle")
+  settle(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.settle(id);
+  }
+}
+
+/** Danh bạ OA đối tác. Tách controller riêng vì không thuộc về một chuyến đi nào. */
+@Controller("partners")
+export class PartnersController {
+  constructor(private readonly trips: TripsService) {}
+
+  @Get()
+  list(
+    @Query("city") city?: string,
+    @Query("category") category?: string,
+    @Query("limit") limit?: string
+  ) {
+    return this.trips.listPartners({
+      city,
+      category,
+      limit: limit ? Number(limit) : undefined
+    });
   }
 }

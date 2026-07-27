@@ -163,12 +163,21 @@ docker compose exec api node -e "require('./dist/db/seed-partners.js')" \
 
 ## Bước 5 — Mini App (20 phút, chạy song song được)
 
+> ⚠️ **Chạy trên MÁY DEV, không phải VPS.** VPS không có Node/pnpm, và `zmp deploy`
+> cần credential Zalo trên máy bạn. Mini App được đẩy lên CDN của Zalo — nó KHÔNG
+> chạy trên VPS. VPS chỉ phục vụ API mà Mini App gọi vào.
+
 ```bash
-cd apps/miniapp
-cp .env.example .env       # đặt VITE_API_BASE_URL=https://zah19-team35.123c.vn/api
-pnpm build
+# trên máy Mac, trong monorepo
+cd projects/lisa-travel-agent/apps/miniapp
+cp .env.example .env       # đặt VITE_API_BASE_URL=<PUBLIC_BASE_URL>/api
+cd ../.. && pnpm install
+pnpm --filter miniapp build
 pnpm --filter miniapp exec zmp deploy    # hoặc dùng workflow CD · Development
 ```
+
+`VITE_API_BASE_URL` phải trỏ về đúng nơi API đang chạy — domain BTC khi có DNS,
+hoặc URL Cloudflare Tunnel khi đang test.
 
 Màn quan trọng nhất là `/handoff` — Concierge Handoff. Test bằng cách mở:
 

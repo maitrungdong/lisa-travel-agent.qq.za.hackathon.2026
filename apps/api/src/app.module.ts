@@ -5,7 +5,7 @@ import { HealthController } from "./health.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { WorkerService } from "./jobs/worker.service";
 import { MediaService } from "./media/media.service";
-import { TripsController } from "./trips/trips.controller";
+import { PartnersController, TripsController } from "./trips/trips.controller";
 import { TripsService } from "./trips/trips.service";
 import { ConversationService } from "./zalo/conversation.service";
 import { ZaloClient } from "./zalo/zalo.client";
@@ -23,7 +23,7 @@ import { ZaloController } from "./zalo/zalo.controller";
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, TripsController, ZaloController],
+  controllers: [HealthController, TripsController, PartnersController, ZaloController],
   providers: [
     TripsService,
     ZaloClient,

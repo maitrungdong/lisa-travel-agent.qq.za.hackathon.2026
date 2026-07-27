@@ -5,6 +5,7 @@ import GalleryPage from "./pages/gallery";
 import HandoffPage from "./pages/handoff";
 import HomePage from "./pages/home";
 import ItineraryPage from "./pages/itinerary";
+import PartnersPage from "./pages/partners";
 
 // HashRouter: bundle chạy dưới sub-path CDN của Zalo, không kiểm soát được
 // server routing → hash routing là lựa chọn an toàn nhất.
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/itinerary" element={<ItineraryPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/partners" element={<PartnersPage />} />
           {/* Concierge Handoff — Lisa soạn tin, user bấm gửi sang OA đối tác */}
           <Route path="/handoff" element={<HandoffPage />} />
         </Routes>
