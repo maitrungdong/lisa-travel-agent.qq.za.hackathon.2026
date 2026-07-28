@@ -122,18 +122,33 @@ jobs:
       - name: Dựng QR mở Mini App
         id: qr
         if: success()
+        # QR chỉ là tiện ích trang tóm tắt. Bundle đã lên Zalo ở bước trước rồi,
+        # nên bước này hỏng KHÔNG được phép đánh trượt cả lần deploy thành công.
+        continue-on-error: true
         env:
           APP_ID: ${{ secrets.ZALO_APP_ID }}
         run: |
-          npm install --no-save --no-audit --no-fund qrcode@1.5.4 >/dev/null 2>&1
-          node -e '
+          # Cài ra thư mục tạm NGOÀI repo. Chạy `npm` bên trong repo sẽ bị
+          # corepack chặn thẳng: package.json gốc khai "packageManager": "pnpm@…"
+          # nên shim npm báo "This project is configured to use pnpm" và thoát 1.
+          cd "$RUNNER_TEMP"
+          npm install --prefix "$RUNNER_TEMP/qr" --no-audit --no-fund qrcode@1.5.4
+
+          # KHÔNG nuốt stderr (bản cũ có `>/dev/null 2>&1`): lỗi cài đặt biến
+          # thành "Process completed with exit code 1" trần trụi, không manh mối.
+          NODE_PATH="$RUNNER_TEMP/qr/node_modules" node -e '
             const QRCode = require("qrcode");
             const url = `https://zalo.me/s/${process.env.APP_ID}/`;
-            QRCode.toString(url, { type: "svg", margin: 1, width: 260 }).then((svg) => {
-              const uri = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
-              require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
-              require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `qr=${uri}\n`);
-            });
+            QRCode.toString(url, { type: "svg", margin: 1, width: 260 })
+              .then((svg) => {
+                const uri = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+                require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
+                require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `qr=${uri}\n`);
+              })
+              .catch((err) => {
+                console.error("Không dựng được QR:", err);
+                process.exit(1);
+              });
           '
 
       # Mọi giá trị do người dùng kiểm soát (mô tả phiên bản, commit message)
