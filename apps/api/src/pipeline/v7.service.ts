@@ -193,8 +193,23 @@ export class V7Service {
           zaloChatId: run.zaloChatId,
           thinState: state
         });
-        await this.save(run.id, { status: mapIntakeStatus(intake.status) });
-        if (isTerminal(intake.status)) await this.cleanup(run.id);
+        const next = mapIntakeStatus(intake.status);
+        if (intake.status === "blocked") {
+          /**
+           * ĐO THẬT 29/07: Intake trả `blocked` kèm một CÂU HỎI ("chọn style
+           * chuyến đi") thay vì `gathering`. Theo §6.8 thì sai, nhưng nếu
+           * backend coi đó là terminal thì flow chết giữa chừng và nhóm phải
+           * bắt đầu lại từ đầu — hỏng nặng hơn nhiều so với việc giữ flow sống.
+           *
+           * Nên `blocked` chỉ được ghi log, không kết thúc run. Nhóm luôn có
+           * cửa thoát cứng (`thoát`) và TTL 24h.
+           */
+          this.log.warn(
+            `${tag} Intake trả blocked — giữ flow sống. Nếu là câu hỏi thì prompt nên dùng "gathering".`
+          );
+        }
+        await this.save(run.id, { status: intake.status === "blocked" ? "awaiting_user" : next });
+        if (isTerminal(intake.status) && intake.status !== "blocked") await this.cleanup(run.id);
         return;
       }
 
@@ -340,7 +355,36 @@ export class V7Service {
     if (sessions[agent] !== sessionId) {
       await this.save(run.id, { agentSessions: { ...sessions, [agent]: sessionId } });
     }
-    return parseAgentJson(agent, raw);
+
+    try {
+      return parseAgentJson(agent, raw);
+    } catch (err) {
+      if (!(err instanceof V7ValidationError)) throw err;
+
+      /**
+       * ĐO THẬT 29/07: Intake trả JSON BỊ CẮT giữa chừng —
+       * `"workflow_reply": { "flow_id": null, "e` rồi đứt.
+       *
+       * Nguyên nhân là schema §6.8 quá đồ sộ (normalized_request đầy đủ với
+       * trip + split_bill + workflow_reply + handoff) chạm trần output token
+       * của agent. Sửa gốc là nâng max tokens trên Console, nhưng backend vẫn
+       * cần lớp cứu: xin lại một bản GỌN, chỉ giữ field bắt buộc.
+       *
+       * Đúng MỘT lần. Session còn nguyên ngữ cảnh nên không phải gửi lại payload.
+       */
+      this.log.warn(
+        `[${run.traceId.slice(0, 8)}] ${agent} output hỏng (${err.reason}) → xin bản gọn hơn`
+      );
+      const retry = await this.driver.runAgent({
+        agentId,
+        payload: COMPACT_RETRY[agent],
+        timeoutMs: V7_TIMEOUT_MS[agent],
+        traceId: run.traceId,
+        label: `${agent}-retry`,
+        existingSessionId: sessionId
+      });
+      return parseAgentJson(agent, retry.raw); // hỏng tiếp thì ném, caller gửi fallback
+    }
   }
 
   /** Gửi nguyên văn, chỉ cắt cho vừa 2000 ký tự. Không render markdown (§3.1). */
@@ -388,6 +432,33 @@ export class V7Service {
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * Lời nhắc khi output bị cắt hoặc hỏng.
+ *
+ * Điểm chung: bảo agent BỎ mọi field không bắt buộc. Với §6.8 thì phần
+ * `normalized_request` chiếm phần lớn độ dài mà backend không đọc tới —
+ * bỏ nó đi là output ngắn lại vài lần và vẫn đủ dùng.
+ */
+const COMPACT_RETRY: Record<V7Agent, string> = {
+  INTAKE:
+    "Output vừa rồi không dùng được (có thể bị cắt vì quá dài). Trả lời LẠI, " +
+    "chỉ một JSON object thuần, KHÔNG có ``` và không có chữ nào ngoài JSON.\n" +
+    "Chỉ giữ: status, route (target + reason_code), handoff (deliverable_type, " +
+    "brief_complete, missing_blockers, owner_confirmation, scope_summary), " +
+    "state_patch, message_to_user.\n" +
+    "BỎ HẲN normalized_request và mọi field null/rỗng không bắt buộc.",
+  BRAIN:
+    "Output vừa rồi không dùng được (có thể bị cắt vì quá dài). Trả lời LẠI, " +
+    "chỉ một JSON object thuần.\n" +
+    "Chỉ giữ: status, response_kind, decision_summary, state_patch, " +
+    "draft_message_to_user, evidence (tối đa 3 mục, mỗi mục chỉ source_ref + " +
+    "display_name + url), quality.\n" +
+    "Rút gọn tối đa, đừng lặp lại nội dung đã có trong draft_message_to_user.",
+  FINALIZER:
+    "Output vừa rồi không dùng được (có thể bị cắt vì quá dài). Trả lời LẠI, " +
+    "chỉ một JSON object thuần: status, message_to_user, reply_contract, state_patch."
+};
 
 /** Status của Intake → status của run. Chỉ hai giá trị là kết thúc flow. */
 function mapIntakeStatus(status: string): RunStatus {

@@ -200,24 +200,27 @@ export class AuthService {
       .returning();
     if (used.length === 0) return { ok: false, reason: "Mã vừa được dùng bởi người khác" };
 
-    try {
-      await this.db
-        .insert(personLinks)
-        .values({
-          appUserId: row.appUserId,
-          zaloBotUserId,
-          displayName,
-          linkedVia: "code",
-          conversationId: conversationId ?? null
-        })
-        .onConflictDoUpdate({
-          target: personLinks.appUserId,
-          set: { zaloBotUserId, displayName, conversationId: conversationId ?? null }
-        });
-    } catch {
-      // Vướng unique bên phía bot: tài khoản Zalo khác đã nhận là người này rồi.
-      return { ok: false, reason: "Thành viên này đã được liên kết với tài khoản khác" };
-    }
+    /**
+     * Dọn liên kết cũ ở CẢ HAI chiều rồi mới ghi mới.
+     *
+     * Vì sao không chỉ `onConflictDoUpdate`: có hai unique index, và bản đầu chỉ
+     * xử lý một. Người dùng đổi máy / xoá dữ liệu app → app_user mới → gõ mã →
+     * đụng unique phía bot → báo "đã liên kết với tài khoản khác", tức là bị
+     * chính mình chặn. Chuyện này gặp ngay lần test thứ hai.
+     *
+     * Ghi đè là ĐÚNG về mặt an toàn: người chứng minh danh tính là người GÕ MÃ
+     * trong nhóm, và `zaloBotUserId` do webhook của Zalo khẳng định. Ai gõ được
+     * mã bằng tài khoản đó thì đúng là chủ của danh tính đó.
+     */
+    await this.db.delete(personLinks).where(eq(personLinks.zaloBotUserId, zaloBotUserId));
+    await this.db.delete(personLinks).where(eq(personLinks.appUserId, row.appUserId));
+    await this.db.insert(personLinks).values({
+      appUserId: row.appUserId,
+      zaloBotUserId,
+      displayName,
+      linkedVia: "code",
+      conversationId: conversationId ?? null
+    });
 
     return { ok: true, appUserId: row.appUserId };
   }

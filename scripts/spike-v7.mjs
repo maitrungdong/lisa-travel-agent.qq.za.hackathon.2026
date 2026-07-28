@@ -100,6 +100,56 @@ async function req(method, path, body) {
   }
 }
 
+const COMPACT = {
+  INTAKE:
+    "Output vừa rồi không dùng được (có thể bị cắt vì quá dài). Trả lời LẠI, chỉ một " +
+    "JSON object thuần, không có ```.\nChỉ giữ: status, route (target + reason_code), " +
+    "handoff (deliverable_type, brief_complete, missing_blockers, owner_confirmation, " +
+    "scope_summary), state_patch, message_to_user.\nBỎ HẲN normalized_request.",
+  BRAIN:
+    "Output vừa rồi không dùng được (có thể bị cắt). Trả lời LẠI, chỉ một JSON thuần: " +
+    "status, response_kind, decision_summary, state_patch, draft_message_to_user, " +
+    "evidence (tối đa 3 mục), quality. Rút gọn tối đa.",
+  FINALIZER:
+    "Output vừa rồi không dùng được (có thể bị cắt). Trả lời LẠI, chỉ một JSON thuần: " +
+    "status, message_to_user, reply_contract, state_patch."
+};
+
+/** Gửi text thô vào session hiện có, trả về text agent đáp lại. */
+async function raw(agent, text) {
+  const sid = sessions[agent];
+  const stream = await fetch(`${API}/v1/sessions/${sid}/events/stream`, {
+    headers: { ...H, accept: "text/event-stream" }
+  });
+  await req("POST", `/v1/sessions/${sid}/events`, {
+    events: [{ type: "user.message", content: [{ type: "text", text }] }]
+  });
+  const reader = stream.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let out = "";
+  outer: for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const p = line.slice(5).trim();
+      if (!p || p === "[DONE]") continue;
+      let ev;
+      try { ev = JSON.parse(p); } catch { continue; }
+      if (ev.type === "agent.message") {
+        const t = Array.isArray(ev.content) ? ev.content.map((b) => b?.text ?? "").join("") : String(ev.content ?? "");
+        if (t.trim()) out = t;
+      } else if (ev.type === "session.status_idle") break outer;
+    }
+  }
+  await reader.cancel().catch(() => {});
+  return out;
+}
+
 async function callAgent(agent, payload) {
   const started = Date.now();
   // Giống driver thật: BRAIN luôn session mới, hai con kia tái dùng
@@ -174,15 +224,23 @@ async function callAgent(agent, payload) {
 
   const ms = Date.now() - started;
   timings.push({ agent, ms, tools });
-  const parsed = parse(out);
+  let parsed = parse(out);
   console.log(
     `    ${agent.padEnd(9)} ${(ms / 1000).toFixed(1).padStart(6)}s · tool ${tools} → ` +
       (parsed?.status ?? "JSON HỎNG")
   );
+
+  // Giống backend: output cắt/hỏng thì xin lại bản GỌN đúng một lần
   if (!parsed) {
-    console.log("    ─── raw ───\n" + out.slice(0, 1200));
-    throw new Error(`${agent} không trả JSON`);
+    const truncated = out.trim().startsWith("{") || out.includes("```json");
+    console.log(
+      `    ⚠ ${truncated ? "output bị CẮT giữa chừng" : "không phải JSON"} — xin lại bản gọn`
+    );
+    console.log("    ─── raw (400 ký tự cuối) ───\n" + out.slice(-400));
+    parsed = parse(await raw(agent, COMPACT[agent]));
+    if (parsed) console.log(`    ↻ ${agent} retry → ${parsed.status}`);
   }
+  if (!parsed) throw new Error(`${agent} không trả JSON kể cả sau khi xin bản gọn`);
   if (!STATUSES[agent].includes(parsed.status)) {
     console.log(`    ⚠ status "${parsed.status}" ngoài enum [${STATUSES[agent].join(", ")}]`);
   }

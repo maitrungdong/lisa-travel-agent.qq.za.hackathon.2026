@@ -39,7 +39,7 @@ export default function HomePage() {
     void fetchZaloUser().then(setUser);
     // Phiên là tính năng CỘNG THÊM: không lấy được thì `me` cứ null và mọi thứ
     // chạy y như trước. Không được để đăng nhập biến thành cửa ải chặn đường.
-    void session.me().then(setMe);
+    if (AUTH_ENABLED) void session.me().then(setMe);
   }, []);
 
   // Nhật ký "Zino đã làm gì" nằm ở /full chứ không có trong recap — tải rời và
@@ -68,7 +68,7 @@ export default function HomePage() {
    * trách nhiệm nói rõ hỏng ở đâu.
    */
   const linkBanner =
-    !me?.linked ? (
+    AUTH_ENABLED && !me?.linked ? (
       <Link
         to="/link"
         className="flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3.5 py-3 text-sm"
