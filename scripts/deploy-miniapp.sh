@@ -59,7 +59,7 @@ step "1/6 · Xác định URL API"
 if [ -z "${API_BASE:-}" ]; then
   echo "  hỏi VPS $VPS_USER@$VPS_HOST:$VPS_PORT ..."
   API_BASE="$(ssh -p "$VPS_PORT" -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" \
-    "grep '^PUBLIC_BASE_URL=' /opt/lisa/.env | tail -1 | cut -d= -f2-" 2>/dev/null || true)"
+    "grep '^PUBLIC_BASE_URL=' /opt/zino/.env | tail -1 | cut -d= -f2-" 2>/dev/null || true)"
 fi
 
 API_BASE="$(printf '%s' "$API_BASE" | tr -d '[:space:]' | sed 's:/*$::')"

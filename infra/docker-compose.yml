@@ -1,31 +1,31 @@
 # ┌──────────────────────────────────────────────────────────────────────────┐
-# │ Stack Lisa trên VPS — CHỈ 2 service: postgres + api.                      │
+# │ Stack Zino trên VPS — CHỈ 2 service: postgres + api.                      │
 # │                                                                          │
 # │ KHÔNG có caddy, KHÔNG có openclaw. Lý do:                                │
 # │  • nginx của BTC đang giữ 80/443 với wildcard cert *.123c.vn → mình chỉ  │
-# │    THÊM 1 file conf (infra/nginx/lisa.conf), không dựng reverse proxy #2. │
+# │    THÊM 1 file conf (infra/nginx/zino.conf), không dựng reverse proxy #2. │
 # │  • Toàn bộ logic agent (webhook Zalo + worker + tool) nằm trong api.     │
 # │                                                                          │
 # │ Luồng vào:                                                               │
 # │   Internet :443 → nginx (BTC) ├─ /zalo/  → 127.0.0.1:3000  (webhook)     │
 # │                               ├─ /api/   → 127.0.0.1:3000  (BFF Mini App)│
-# │                               ├─ /media/ → /opt/lisa/media (ảnh)         │
-# │                               └─ /trip/  → /opt/lisa/recap (trang recap) │
+# │                               ├─ /media/ → /opt/zino/media (ảnh)         │
+# │                               └─ /trip/  → /opt/zino/recap (trang recap) │
 # │                                                                          │
 # │ Chạy trên VPS:                                                           │
-# │   cd /opt/lisa && cp .env.example .env && vi .env && docker compose up -d │
+# │   cd /opt/zino && cp .env.example .env && vi .env && docker compose up -d │
 # └──────────────────────────────────────────────────────────────────────────┘
 
-name: lisa
+name: zino
 
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: lisa
+      POSTGRES_USER: zino
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD trong .env}
-      POSTGRES_DB: lisa
+      POSTGRES_DB: zino
       # Giờ VN cho cả server DB — reminder/lịch trình phụ thuộc trực tiếp vào đây
       TZ: Asia/Ho_Chi_Minh
       PGTZ: Asia/Ho_Chi_Minh
@@ -35,7 +35,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lisa -d lisa"]
+      test: ["CMD-SHELL", "pg_isready -U zino -d zino"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,7 +56,7 @@ services:
       PORT: "3000"
       # Giờ VN — để mặc định (UTC/EDT) là mọi reminder lệch 7–11 tiếng
       TZ: Asia/Ho_Chi_Minh
-      DATABASE_URL: postgres://lisa:${POSTGRES_PASSWORD}@postgres:5432/lisa
+      DATABASE_URL: postgres://zino:${POSTGRES_PASSWORD}@postgres:5432/zino
       # Origin được phép gọi /api/ từ trình duyệt (Mini App chạy trên h5.zdn.vn)
       CORS_ORIGINS: ${CORS_ORIGINS:-https://h5.zdn.vn}
       # Bảo vệ các endpoint ghi dữ liệu (worker/agent gọi nội bộ)
@@ -79,8 +79,8 @@ services:
       # Container chạy user `node` (uid 1000) — trùng uid của user zah19-team35 trên
       # VPS, nên vps-bootstrap.sh chown 1000:1000 là cả 2 phía cùng ghi/đọc được.
       # (SELinux đang Permissive nên không cần cờ ':z'; nếu bật Enforcing thì thêm ':z')
-      - ${MEDIA_HOST_DIR:-/opt/lisa/media}:/data/media
-      - ${RECAP_HOST_DIR:-/opt/lisa/recap}:/data/recap
+      - ${MEDIA_HOST_DIR:-/opt/zino/media}:/data/media
+      - ${RECAP_HOST_DIR:-/opt/zino/recap}:/data/recap
     healthcheck:
       # Image node:20-alpine không có curl → dùng fetch có sẵn của Node 20
       test:

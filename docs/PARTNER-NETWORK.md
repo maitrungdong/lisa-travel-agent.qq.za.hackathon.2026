@@ -1,4 +1,4 @@
-# Lisa Partner Network — vòng lặp khép kín, hợp lệ 100%
+# Zino Partner Network — vòng lặp khép kín, hợp lệ 100%
 
 > Cách để agent "hỏi OA và nhận được câu trả lời" mà **không** đụng tới zca-js.
 
@@ -11,11 +11,11 @@ Nghiên cứu trước kết luận đúng hai điều:
 - Zalo **không có** API để server gửi tin tới OA khác
 - `openChat` prefilled là đường hợp lệ duy nhất — nhưng **user phải bấm Gửi**
 
-Chỗ ai cũng dừng lại: *"user bấm Gửi rồi thì sao? Lisa đâu biết OA trả lời gì."*
+Chỗ ai cũng dừng lại: *"user bấm Gửi rồi thì sao? Zino đâu biết OA trả lời gì."*
 
-**Nhưng nếu OA đối tác đã uỷ quyền cho app của Lisa** thì tin nhắn user vừa gửi
+**Nhưng nếu OA đối tác đã uỷ quyền cho app của Zino** thì tin nhắn user vừa gửi
 sẽ rơi thẳng vào **webhook của chính chúng ta**. Từ đó ta trả lời thay merchant,
-và đẩy kết quả ngược về nhóm chat của Lisa.
+và đẩy kết quả ngược về nhóm chat của Zino.
 
 Vòng lặp khép kín. User chỉ bấm Gửi đúng một lần — phần còn lại tự động.
 
@@ -30,9 +30,9 @@ Vòng lặp khép kín. User chỉ bấm Gửi đúng một lần — phần cò
 sequenceDiagram
     autonumber
     participant M as Admin OA Merchant
-    participant B as Lisa Backend
+    participant B as Zino Backend
     participant U as User (nhóm Zalo)
-    participant L as Lisa Bot
+    participant L as Zino Bot
     participant OA as OA Merchant
 
     rect rgb(240,248,255)
@@ -55,7 +55,7 @@ sequenceDiagram
     rect rgb(240,255,240)
     Note over B,U: TỰ ĐỘNG — không cần user làm gì nữa
     OA-->>B: webhook user_send_text (có oa_id + user uid)
-    B->>B: khớp lead với hội thoại Lisa gốc
+    B->>B: khớp lead với hội thoại Zino gốc
     B->>B: merchant agent soạn trả lời từ inventory của OA
     B->>OA: OA API v3.0 gửi tin tư vấn → user
     OA->>U: "Còn 3 phòng Deluxe, 1.9tr/đêm, gồm ăn sáng"
@@ -73,7 +73,7 @@ sequenceDiagram
 | Merchant uỷ quyền | OAuth v4 + PKCE | API chính thức, có màn hình đồng ý |
 | Nhận tin user gửi OA | Webhook OA | Chỉ nhận của OA đã uỷ quyền cho app |
 | Trả lời user | Tin Tư vấn qua OA API v3.0 | User vừa nhắn → cửa sổ tư vấn mở, miễn phí |
-| Đẩy về nhóm Lisa | Zalo Bot API | Bot của chính mình |
+| Đẩy về nhóm Zino | Zalo Bot API | Bot của chính mình |
 
 Không có bước nào giả lập tài khoản cá nhân. Không dùng thư viện unofficial.
 Mỗi tin gửi đi đều có **uỷ quyền tường minh** từ chủ sở hữu OA.
@@ -91,7 +91,7 @@ Mỗi tin gửi đi đều có **uỷ quyền tường minh** từ chủ sở h�
 | Rủi ro | ban tài khoản, loại thi | không |
 
 Với merchant, đây là giá trị thật: OA du lịch thường trả lời lead sau nhiều giờ.
-Lisa trả lời trong 3 giây, bằng dữ liệu chính merchant cung cấp.
+Zino trả lời trong 3 giây, bằng dữ liệu chính merchant cung cấp.
 
 ---
 
@@ -171,7 +171,7 @@ Webhook URL:   https://<PUBLIC_BASE_URL>/oa/webhook
 ### Bước 3 — Nạp cấu hình lên VPS (5 phút)
 
 ```bash
-cd /opt/lisa
+cd /opt/zino
 sed -i '/^ZALO_APP_ID=/d; /^ZALO_APP_SECRET=/d; /^ZALO_OA_SECRET=/d' .env
 cat >> .env <<'EOF'
 ZALO_APP_ID=<app id>
@@ -204,7 +204,7 @@ Phải thấy OA vừa kết nối trong danh sách.
 Agent **chỉ trả lời trong phạm vi** dữ liệu này. Bỏ trống thì nó chỉ chào hỏi.
 
 ```bash
-docker compose exec postgres psql -U lisa -d lisa -c "
+docker compose exec postgres psql -U zino -d zino -c "
 UPDATE partner_oas SET inventory_note = \$\$
 Loại phòng và giá (đã gồm ăn sáng, chưa VAT):
 - Deluxe hướng vườn  1.500.000đ/đêm, 2 khách
@@ -229,13 +229,13 @@ Cho mình hỏi giá và chính sách huỷ nhé!
 Kỳ vọng, trong ~5 giây:
 
 1. OA **tự trả lời** bằng đúng dữ liệu ở bước 5 — có giá thật, có ưu đãi nhóm 10%
-2. Nhóm chat Lisa nhận tóm tắt: *"📩 … vừa trả lời: …"*
+2. Nhóm chat Zino nhận tóm tắt: *"📩 … vừa trả lời: …"*
 
 Theo dõi:
 
 ```bash
 docker compose logs -f api | grep -iE "oa|lead|merchant"
-docker compose exec postgres psql -U lisa -d lisa -c \
+docker compose exec postgres psql -U zino -d zino -c \
   "SELECT id, oa_user_id, status, left(last_user_message,50), left(last_reply,60) FROM oa_leads ORDER BY id DESC LIMIT 5;"
 ```
 

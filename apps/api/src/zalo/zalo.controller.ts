@@ -13,6 +13,13 @@ import { normalizeUpdate, type ZaloUpdate } from "./zalo.types";
  * Zalo retry khi webhook timeout → xử lý đồng bộ = agent chạy 2 lần cho 1 tin.
  * Ở đây chỉ làm 4 việc rẻ: verify chữ ký · chuẩn hoá · tải ảnh · đẩy vào hàng đợi.
  */
+/**
+ * Cửa sổ gộp tin. Đủ dài để hứng một loạt người cùng nhắn, đủ ngắn để chat
+ * không có cảm giác ì. 1,2s là điểm cân bằng — người dùng vẫn thấy "typing"
+ * xuất hiện tức thì nên không nhận ra độ trễ này.
+ */
+const BATCH_WINDOW_MS = Number(process.env.ZINO_BATCH_WINDOW_MS ?? 1200);
+
 @Controller("zalo")
 export class ZaloController {
   private readonly log = new Logger(ZaloController.name);
@@ -87,8 +94,20 @@ export class ZaloController {
       return;
     }
 
-    // dedupeKey = chatId → mọi tin trong cùng nhóm chạy TUẦN TỰ, không ghi đè state
-    await this.jobs.enqueue(
+    /**
+     * GỘP theo cửa sổ thời gian thay vì tạo job cho từng tin.
+     *
+     * Trong nhóm, nhiều người mention bot gần như cùng lúc là chuyện thường.
+     * Mỗi tin một lượt agent thì: người cuối chờ rất lâu, tốn N lần token, và
+     * mỗi lượt Zino chỉ thấy một mẩu nên trả lời rời rạc.
+     *
+     * Gộp lại: một lượt duy nhất đọc cả loạt tin, rồi CHÍNH AGENT quyết định
+     * gộp hay tách câu trả lời (tool `reply`) — vì đó là quyết định ngữ nghĩa.
+     *
+     * dedupeKey = chatId cũng đảm bảo mỗi nhóm chỉ có 1 lượt chạy tại một thời
+     * điểm, không ghi đè state của nhau.
+     */
+    await this.jobs.enqueueCoalesced(
       "agent_turn",
       {
         conversationId: conv.id,
@@ -103,7 +122,8 @@ export class ZaloController {
         isNew: conv.isNew,
         seenCount: conv.seenCount
       },
-      { dedupeKey: msg.chatId }
+      msg.chatId,
+      BATCH_WINDOW_MS
     );
   }
 

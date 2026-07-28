@@ -7,14 +7,14 @@ Yêu cầu: VPS Ubuntu ≥ 2GB RAM, domain đã trỏ `A` record (`api.<domain>`
 > Mới nhận VPS? Chạy `scripts/vps-inspect.sh` và làm theo [`06-verify-vps.md`](./06-verify-vps.md) trước — kiểm tra RAM/disk/port/egress, tránh bootstrap rồi mới phát hiện thiếu.
 
 ```bash
-# 1. Trên VPS: cài Docker, mở firewall, tạo /opt/lisa
+# 1. Trên VPS: cài Docker, mở firewall, tạo /opt/zino
 bash scripts/vps-bootstrap.sh   # scp lên rồi chạy
 
 # 2. Từ máy dev: đẩy infra lần đầu
-rsync -avz infra/ user@vps:/opt/lisa/
+rsync -avz infra/ user@vps:/opt/zino/
 
 # 3. Trên VPS: điền secret rồi khởi động
-cd /opt/lisa
+cd /opt/zino
 cp .env.example .env && nano .env   # DOMAIN, POSTGRES_PASSWORD, API_IMAGE,
                                     # AGENT_API_KEY, ZALO_BOT_TOKEN, ANTHROPIC_API_KEY
 docker compose up -d
@@ -24,13 +24,13 @@ docker compose run --rm --entrypoint node openclaw dist/index.js onboard --mode 
 
 # 5. Tạo schema DB (từ máy dev, qua SSH tunnel)
 ssh -L 5432:127.0.0.1:5432 user@vps        # giữ tunnel mở
-DATABASE_URL=postgres://lisa:<password>@localhost:5432/lisa pnpm db:push
+DATABASE_URL=postgres://zino:<password>@localhost:5432/zino pnpm db:push
 ```
 
 Control UI của OpenClaw **không expose ra internet** — truy cập qua tunnel:
 `ssh -L 18789:127.0.0.1:18789 user@vps` → mở `http://127.0.0.1:18789`.
 
-Persona Lisa: `infra/openclaw/workspace/AGENTS.md` (nhiệm vụ + cách gọi API) và `SOUL.md` (giọng điệu) — sửa trong repo, push lên `main` là workflow tự sync + restart openclaw.
+Persona Zino: `infra/openclaw/workspace/AGENTS.md` (nhiệm vụ + cách gọi API) và `SOUL.md` (giọng điệu) — sửa trong repo, push lên `main` là workflow tự sync + restart openclaw.
 
 ## 2. GitHub Environments, secrets & variables
 
@@ -66,9 +66,9 @@ Rollback API: re-run `deploy-api.yml` ở commit cũ (image pin theo SHA).
 
 ## 4. Checklist demo hackathon
 
-- [ ] Add bot Lisa vào nhóm Zalo của team, @Lisa để lên kế hoạch.
-- [ ] Lisa tạo trip qua `POST /trips` → mở mini app thấy chuyến đi, lịch trình, chi phí.
-- [ ] Sửa `AGENTS.md` → push → Lisa đổi hành vi (demo "agentic ops").
+- [ ] Add bot Zino vào nhóm Zalo của team, @Zino để lên kế hoạch.
+- [ ] Zino tạo trip qua `POST /trips` → mở mini app thấy chuyến đi, lịch trình, chi phí.
+- [ ] Sửa `AGENTS.md` → push → Zino đổi hành vi (demo "agentic ops").
 - [ ] `git tag v0.1.0 && git push --tags` → bản TESTING để đưa Zalo xét duyệt.
 
 ## Nguồn

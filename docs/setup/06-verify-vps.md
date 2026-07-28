@@ -1,6 +1,6 @@
 # Verify VPS mới nhận từ BTC
 
-Mục tiêu: trong ~10 phút biết chắc **VPS này là gì, cho mình những gì, có chạy nổi stack Lisa không** — trước khi chạy `vps-bootstrap.sh`. Làm xong mới sang [`04-vps-va-ci-cd.md`](./04-vps-va-ci-cd.md).
+Mục tiêu: trong ~10 phút biết chắc **VPS này là gì, cho mình những gì, có chạy nổi stack Zino không** — trước khi chạy `vps-bootstrap.sh`. Làm xong mới sang [`04-vps-va-ci-cd.md`](./04-vps-va-ci-cd.md).
 
 ## 0. Hỏi BTC 6 thông tin (nếu chưa có)
 
@@ -33,7 +33,7 @@ ssh-copy-id -p 22 user@<IP>
 ## 2. Chạy script recon (chỉ đọc, không sửa gì)
 
 ```bash
-cd projects/lisa-travel-agent
+cd projects/zino-travel-agent
 scp scripts/vps-inspect.sh user@<IP>:/tmp/
 ssh user@<IP> 'bash /tmp/vps-inspect.sh' | tee vps-report.txt
 ```
@@ -114,7 +114,7 @@ ls -d /etc/letsencrypt/live/*/ 2>/dev/null      # BTC đã xin cert cho domain n
 
 ```bash
 sudo systemctl disable --now nginx
-LISA_TAKE_PORTS=1 bash vps-bootstrap.sh
+ZINO_TAKE_PORTS=1 bash vps-bootstrap.sh
 ```
 
 **Cách B — giữ nginx làm reverse proxy ngoài cùng.** Chọn khi BTC đã cấu hình sẵn domain + cert trên nginx cho team bạn. Khi đó bỏ service `caddy` khỏi compose, cho `api` bind loopback, rồi trỏ nginx vào:
@@ -126,7 +126,7 @@ LISA_TAKE_PORTS=1 bash vps-bootstrap.sh
 ```
 
 ```nginx
-# /etc/nginx/conf.d/lisa.conf
+# /etc/nginx/conf.d/zino.conf
 location /api/ { proxy_pass http://127.0.0.1:3000/; proxy_set_header Host $host; }
 ```
 
@@ -139,14 +139,14 @@ Mini App bắt buộc gọi API qua HTTPS, mà Let's Encrypt không cấp cert c
 **(a) BTC đã cấp cert sẵn** — kiểm tra `sudo ls /etc/nginx/certs/` và `nginx -T | grep ssl_certificate`. Có thì dùng luôn, khỏi phụ thuộc ACME:
 
 ```bash
-sudo mkdir -p /opt/lisa/certs
-sudo cp /etc/nginx/certs/<ten>.pem /opt/lisa/certs/cert.pem
-sudo cp /etc/nginx/certs/<ten>.key /opt/lisa/certs/key.pem   # PHẢI có private key
-sudo chmod 644 /opt/lisa/certs/*
+sudo mkdir -p /opt/zino/certs
+sudo cp /etc/nginx/certs/<ten>.pem /opt/zino/certs/cert.pem
+sudo cp /etc/nginx/certs/<ten>.key /opt/zino/certs/key.pem   # PHẢI có private key
+sudo chmod 644 /opt/zino/certs/*
 ```
 
 ```dotenv
-# /opt/lisa/.env
+# /opt/zino/.env
 API_HOST=zah-35.123c.vn          # phải khớp phạm vi cert
 CADDY_TLS=tls /certs/cert.pem /certs/key.pem
 ```

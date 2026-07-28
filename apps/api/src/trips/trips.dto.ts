@@ -13,7 +13,7 @@ export const createEventSchema = z.object({
   title: z.string().min(1),
   startsAt: z.coerce.date(),
   location: z.string().nullish(),
-  createdBy: z.string().max(64).default("lisa")
+  createdBy: z.string().max(64).default("zino")
 });
 
 export const createExpenseSchema = z.object({

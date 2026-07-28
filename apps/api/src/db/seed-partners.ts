@@ -272,7 +272,7 @@ const PARTNERS = [
 
 async function main(): Promise<void> {
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL ?? "postgres://lisa:lisa@localhost:5432/lisa"
+    connectionString: process.env.DATABASE_URL ?? "postgres://zino:zino@localhost:5432/zino"
   });
   const db = drizzle(pool);
 

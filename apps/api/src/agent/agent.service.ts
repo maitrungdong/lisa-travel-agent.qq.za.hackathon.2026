@@ -4,12 +4,22 @@ import { DB, type Database } from "../db/database.module";
 import { JobsService } from "../jobs/jobs.service";
 import { MediaService, visionMime } from "../media/media.service";
 import { ConversationService } from "../zalo/conversation.service";
-import { buildSystemPrompt } from "./prompt";
+import { STATIC_SYSTEM, buildDynamicContext } from "./prompt";
 import { loadTripState, toolMap, toolsForApi, type ToolContext } from "./tools";
 
-const MODEL = process.env.LISA_MODEL ?? "claude-sonnet-5";
+const MODEL = process.env.ZINO_MODEL ?? "claude-sonnet-5";
 const MAX_TOOL_ROUNDS = 8;
 const MAX_TOKENS = 2000;
+/**
+ * Trần thời gian cho MỘT lượt. Chạm trần thì trả lời tạm còn hơn để user
+ * nhìn "đang soạn tin" mãi rồi im — im lặng là kiểu hỏng tệ nhất trong chat.
+ */
+const TURN_TIMEOUT_MS = Number(process.env.ZINO_TURN_TIMEOUT_MS ?? 75_000);
+/**
+ * Trần số ảnh đính vào một lượt. Mỗi ảnh tốn ~1.500 token — cả nhóm cùng gửi
+ * ảnh mà không chặn thì một lượt phình lên chục nghìn token.
+ */
+const MAX_IMAGES_PER_TURN = 3;
 
 export interface AgentTurnInput {
   conversationId: number;
@@ -22,8 +32,15 @@ export interface AgentTurnInput {
   imageMime: string | null;
 }
 
+export interface QueuedReply {
+  text: string;
+  /** Tên người mà tin này nhắm tới — chỉ có khi agent chủ động tách */
+  to?: string;
+}
+
 export interface AgentTurnResult {
-  reply: string;
+  /** Danh sách tin cần gửi, theo đúng thứ tự. Thường 1 tin; nhiều khi agent tách. */
+  replies: QueuedReply[];
   toolsUsed: string[];
   rounds: number;
 }
@@ -31,7 +48,7 @@ export interface AgentTurnResult {
 type Msg = Anthropic.MessageParam;
 
 /**
- * Một lượt hội thoại của Lisa.
+ * Một lượt hội thoại của Zino.
  *
  * Thiết kế:
  *  • Hot path dùng Messages API (không phải Managed Agents) vì cần <3s và cần
@@ -66,6 +83,7 @@ export class AgentService {
 
     // Tool có thể đổi trip active giữa chừng (create_trip) → giữ ở biến ngoài
     let activeTripId = conv.activeTripId;
+    const queued: QueuedReply[] = [];
 
     const ctx: ToolContext = {
       db: this.db,
@@ -83,20 +101,42 @@ export class AgentService {
       },
       enqueue: async (kind, payload, runAt) => {
         await this.jobs.enqueue(kind as never, payload, { runAt });
+      },
+      queueReply: (text, to) => {
+        queued.push({ text, to });
       }
     } as ToolContext;
 
     const tripState = await loadTripState(ctx);
 
-    const system = buildSystemPrompt({
-      chatType: conv.chatType,
-      senderName: input.senderName,
-      seenCount: conv.seenCount,
-      isReturning: conv.seenCount > 1,
-      memory: memory?.content ?? "",
-      tripState: tripState ? JSON.stringify(tripState, null, 2) : null,
-      nowIso: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
-    });
+    /**
+     * System prompt tách hai khối để bật prompt caching:
+     *   khối 1 (tĩnh)  → cache_control ephemeral, dùng lại ở mọi lượt/mọi nhóm
+     *   khối 2 (động)  → bối cảnh lượt này, không cache
+     *
+     * Cùng với tools (cũng được cache), mỗi lượt tiết kiệm ~2.700 token đọc lại.
+     * Cache hit tính giá 0.1x → giảm khoảng 90% chi phí phần cố định, và giảm
+     * latency đáng kể vì model không phải xử lý lại tiền tố.
+     */
+    const system: Anthropic.TextBlockParam[] = [
+      {
+        type: "text",
+        text: STATIC_SYSTEM,
+        cache_control: { type: "ephemeral" }
+      },
+      {
+        type: "text",
+        text: buildDynamicContext({
+          chatType: conv.chatType,
+          senderName: input.senderName,
+          seenCount: conv.seenCount,
+          isReturning: conv.seenCount > 1,
+          memory: memory?.content ?? "",
+          tripState: tripState ? JSON.stringify(tripState, null, 2) : null,
+          nowIso: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+        })
+      }
+    ];
 
     const messages = await this.buildHistory(input);
 
@@ -114,8 +154,17 @@ export class AgentService {
         ` · trip=${activeTripId ?? "chưa có"} · nhớ=${memory?.content ? "có" : "trống"}`
     );
 
+    let cacheRead = 0;
+    let cacheWrite = 0;
+
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
+
+      // Hết giờ thì dừng vòng lặp, trả lời bằng những gì đã có
+      if (Date.now() - turnStarted > TURN_TIMEOUT_MS) {
+        this.log.warn(`${tag} ⏱ chạm trần ${TURN_TIMEOUT_MS / 1000}s sau ${rounds - 1} vòng`);
+        break;
+      }
 
       const res = await this.client.messages.create({
         model: MODEL,
@@ -128,6 +177,13 @@ export class AgentService {
           { type: "web_search_20260318", name: "web_search", max_uses: 4 } as never
         ]
       });
+
+      const u = res.usage as Anthropic.Usage & {
+        cache_read_input_tokens?: number;
+        cache_creation_input_tokens?: number;
+      };
+      cacheRead += u.cache_read_input_tokens ?? 0;
+      cacheWrite += u.cache_creation_input_tokens ?? 0;
 
       const textParts = res.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -167,17 +223,30 @@ export class AgentService {
     }
 
     this.log.log(
-      `${tag} ◀ trả lời ${finalText.length} ký tự · ${rounds} vòng · ` +
-        `${toolsUsed.length ? toolsUsed.join(", ") : "không dùng tool"} · ` +
-        `${((Date.now() - turnStarted) / 1000).toFixed(1)}s`
+      `${tag} ◀ ${queued.length > 0 ? `${queued.length} tin (agent tách)` : `1 tin ${finalText.length} ký tự`} · ` +
+        `${rounds} vòng · ${toolsUsed.length ? toolsUsed.join(", ") : "không dùng tool"} · ` +
+        `${((Date.now() - turnStarted) / 1000).toFixed(1)}s · ` +
+        `cache đọc ${cacheRead} / ghi ${cacheWrite}`
     );
 
-    if (rounds >= MAX_TOOL_ROUNDS && !finalText) {
-      this.log.warn(`Chạm trần ${MAX_TOOL_ROUNDS} vòng tool mà chưa có câu trả lời`);
-      finalText = "Mình đang xử lý hơi lâu 😅 Bạn nhắn lại giúp mình rõ hơn nhé?";
+    /**
+     * Ưu tiên các tin agent chủ động xếp hàng qua tool `reply` (khi nó quyết
+     * định tách câu trả lời). Không có thì dùng văn bản cuối — đây là đường
+     * mặc định an toàn: agent quên gọi tool cũng không im lặng.
+     */
+    const replies: QueuedReply[] =
+      queued.length > 0
+        ? queued
+        : finalText.trim()
+          ? [{ text: finalText.trim() }]
+          : [];
+
+    if (replies.length === 0) {
+      this.log.warn(`${tag} không sinh ra câu trả lời nào sau ${rounds} vòng`);
+      replies.push({ text: "Mình đang xử lý hơi lâu 😅 Bạn nhắn lại giúp mình rõ hơn nhé?" });
     }
 
-    return { reply: finalText.trim(), toolsUsed, rounds };
+    return { replies, toolsUsed, rounds };
   }
 
   /** Chạy tool, bọc lỗi thành ToolResult để model tự xoay xở. */
@@ -202,50 +271,92 @@ export class AgentService {
     }
   }
 
-  /** L1 — dựng lịch sử hội thoại, đính ảnh của lượt hiện tại cho vision đọc. */
+  /**
+   * Dựng lịch sử + GOM cả loạt tin chưa được trả lời thành một lượt.
+   *
+   * Backend gộp job theo cửa sổ thời gian, nên khi tới đây có thể đã có nhiều
+   * tin từ nhiều người. Tất cả tin nằm SAU câu trả lời gần nhất của Zino đều
+   * là "chưa xử lý" → gộp vào một khối user duy nhất, ghi rõ ai nói gì.
+   *
+   * Nhờ vậy Zino nhìn được cả cuộc trao đổi thay vì từng mẩu rời, và tự quyết
+   * định nên gộp hay tách câu trả lời.
+   */
   private async buildHistory(input: AgentTurnInput): Promise<Msg[]> {
-    const rows = await this.conversations.recentMessages(input.conversationId, 14);
-    const messages: Msg[] = [];
+    const rows = await this.conversations.recentMessages(input.conversationId, 20);
 
-    for (const row of rows.slice(0, -1)) {
+    // Cắt tại câu trả lời cuối cùng của Zino
+    let lastAssistant = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].role === "assistant") {
+        lastAssistant = i;
+        break;
+      }
+    }
+    const history = rows.slice(0, lastAssistant + 1);
+    const pending = rows.slice(lastAssistant + 1).filter((r) => r.role === "user");
+
+    const messages: Msg[] = [];
+    for (const row of history) {
       const text = row.text?.trim();
       if (!text) continue;
       messages.push({
         role: row.role === "assistant" ? "assistant" : "user",
-        content:
-          row.role === "assistant" ? text : `${row.senderName ?? "Bạn"}: ${text}`
+        content: row.role === "assistant" ? text : `${row.senderName ?? "Bạn"}: ${text}`
       });
     }
 
-    // Lượt hiện tại — chỗ duy nhất đính ảnh
     const content: Anthropic.ContentBlockParam[] = [];
+    const senders = new Set<string>();
 
-    if (input.imagePath) {
-      const base64 = await this.media.toBase64(input.imagePath);
-      if (base64) {
-        content.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: visionMime(input.imageMime ?? "image/jpeg"),
-            data: base64
-          }
-        });
-        content.push({
-          type: "text",
-          text:
-            `[Ảnh đính kèm — URL đã lưu: ${input.imageUrl}]\n` +
-            "Tự nhận diện đây là hoá đơn, vé/booking, hay ảnh kỷ niệm rồi hành động tương ứng. " +
-            "Nếu là hoá đơn → add_expense kèm receipt_photo_url là URL trên. " +
-            "Nếu là ảnh kỷ niệm → add_photo với url là URL trên."
-        });
-      }
+    // Đính ảnh của loạt tin này — trần 3 ảnh để không thổi phồng context
+    let attached = 0;
+    for (const row of pending) {
+      if (!row.imageUrl || attached >= MAX_IMAGES_PER_TURN) continue;
+      const path = this.media.pathFromUrl(row.imageUrl);
+      const base64 = path ? await this.media.toBase64(path) : null;
+      if (!base64) continue;
+
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: visionMime(guessMimeFromUrl(row.imageUrl)),
+          data: base64
+        }
+      });
+      content.push({
+        type: "text",
+        text:
+          `[Ảnh trên do ${row.senderName ?? "ai đó"} gửi — URL đã lưu: ${row.imageUrl}]\n` +
+          "Tự nhận diện là hoá đơn, vé/booking, hay ảnh kỷ niệm rồi hành động tương ứng. " +
+          "Hoá đơn → add_expense kèm receipt_photo_url là URL trên. " +
+          "Ảnh kỷ niệm → add_photo với url là URL trên."
+      });
+      attached++;
     }
 
-    const text = input.text?.trim();
-    if (text) content.push({ type: "text", text: `${input.senderName}: ${text}` });
+    // Gom text của cả loạt, ghi rõ ai nói gì
+    const lines = pending
+      .map((r) => {
+        const t = r.text?.trim();
+        if (!t) return null;
+        senders.add(r.senderName ?? "Bạn");
+        return `${r.senderName ?? "Bạn"}: ${t}`;
+      })
+      .filter(Boolean) as string[];
 
-    if (content.length === 0) content.push({ type: "text", text: `${input.senderName} gửi một tin nhắn.` });
+    if (lines.length > 0) {
+      const header =
+        senders.size > 1
+          ? `[${lines.length} tin từ ${senders.size} người, gửi gần như cùng lúc — ` +
+            `xem có liên quan nhau không rồi quyết định gộp hay tách câu trả lời bằng tool \`reply\`]\n\n`
+          : "";
+      content.push({ type: "text", text: header + lines.join("\n") });
+    }
+
+    if (content.length === 0) {
+      content.push({ type: "text", text: `${input.senderName} gửi một tin nhắn.` });
+    }
 
     messages.push({ role: "user", content });
 
@@ -253,6 +364,11 @@ export class AgentService {
     while (messages.length && messages[0].role !== "user") messages.shift();
     return messages;
   }
+}
+
+function guessMimeFromUrl(url: string): string {
+  const ext = url.split(".").pop()?.toLowerCase() ?? "";
+  return { png: "image/png", gif: "image/gif", webp: "image/webp" }[ext] ?? "image/jpeg";
 }
 
 /** Cắt ngắn để log không tràn màn hình. */

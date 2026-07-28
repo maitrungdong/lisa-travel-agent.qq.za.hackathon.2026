@@ -41,6 +41,50 @@ export class JobsService {
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
+  /**
+   * Gộp nhiều tin đến gần nhau thành MỘT lượt agent.
+   *
+   * Vì sao cần: trong nhóm, 5 người mention bot cùng lúc sẽ tạo 5 job. Chạy
+   * tuần tự thì người cuối chờ ~15s, tốn 5 lần token, và mỗi lượt Zino chỉ
+   * thấy một mẩu — trả lời rời rạc, không nắm được cả cuộc trao đổi.
+   *
+   * Cách làm: job đầu tiên được hẹn chạy sau `windowMs`. Tin đến trong cửa sổ
+   * đó KHÔNG tạo job mới, chỉ đẩy lùi thời điểm chạy một chút. Khi cửa sổ đóng,
+   * một lượt duy nhất đọc toàn bộ tin chưa trả lời từ DB.
+   *
+   * Trả về id job đang gom, hoặc null nếu đã gộp vào job có sẵn.
+   */
+  async enqueueCoalesced(
+    kind: JobKind,
+    payload: Record<string, unknown>,
+    dedupeKey: string,
+    windowMs: number
+  ): Promise<number | null> {
+    const runAt = new Date(Date.now() + windowMs);
+
+    // Có job pending cùng khoá → chỉ dời lịch, không tạo thêm.
+    // Trần dời: không quá 2 cửa sổ kể từ lúc tạo, để một người nhắn liên tục
+    // không giữ Zino im lặng mãi.
+    const bumped = await this.db.execute<{ id: number }>(sql`
+      UPDATE ${jobs}
+      SET run_at = LEAST(${runAt}, created_at + ${sql.raw(`interval '${Math.round((windowMs * 2) / 1000)} seconds'`)})
+      WHERE id = (
+        SELECT id FROM ${jobs}
+        WHERE kind = ${kind} AND dedupe_key = ${dedupeKey} AND status = 'pending'
+        ORDER BY id DESC LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id
+    `);
+
+    if (bumped.rows?.[0]) {
+      this.log.debug(`Gộp vào job#${bumped.rows[0].id} (${dedupeKey})`);
+      return null;
+    }
+
+    return this.enqueue(kind, payload, { dedupeKey, runAt });
+  }
+
   async enqueue(
     kind: JobKind,
     payload: Record<string, unknown>,

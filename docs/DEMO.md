@@ -1,4 +1,4 @@
-# Kịch bản demo Lisa — 5 phút
+# Kịch bản demo Zino — 5 phút
 
 > Thành phố: **Vũng Tàu**. Lý do: `themalibuhotel` là OA thật đã xác thực,
 > `openChat` mở được chat thật trên sân khấu.
@@ -22,9 +22,9 @@
 
 ## Mạch 5 phút
 
-### 0:00 — Lisa nhớ nhóm này
+### 0:00 — Zino nhớ nhóm này
 
-Add Lisa vào nhóm, hoặc nhắn "chào Lisa".
+Add Zino vào nhóm, hoặc nhắn "chào Zino".
 
 > *"Lại là nhóm Vũng Tàu năm ngoái! Vẫn né hải sản cho Đông nhỉ?"*
 
@@ -37,7 +37,7 @@ Add Lisa vào nhóm, hoặc nhắn "chào Lisa".
 
 > *"Nhóm mình đi Vũng Tàu 12–14/8, 6 người, ngân sách 3tr/người"*
 
-Lisa hỏi lại 1–2 câu còn thiếu rồi mới tạo.
+Zino hỏi lại 1–2 câu còn thiếu rồi mới tạo.
 
 **Chứng minh:** không đoán bừa. Xác nhận trước khi ghi dữ liệu.
 
@@ -47,7 +47,7 @@ Lisa hỏi lại 1–2 câu còn thiếu rồi mới tạo.
 
 > *"Lên lịch trình giúp mình"*
 
-Lisa: *"Để mình research chút nha"* → kết thúc lượt → **~60 giây sau tự nhắn** lịch trình 3 ngày kèm giá.
+Zino: *"Để mình research chút nha"* → kết thúc lượt → **~60 giây sau tự nhắn** lịch trình 3 ngày kèm giá.
 
 **Chứng minh:** agent chạy nền có tra cứu web thật, và **push chủ động** — Zalo Bot API không có cửa sổ 48h như OA.
 
@@ -57,17 +57,17 @@ Lisa: *"Để mình research chút nha"* → kết thúc lượt → **~60 giây
 
 > *"Tìm chỗ ở gần biển giúp mình"*
 
-Lisa đưa danh sách → mở Mini App tab **Đối tác** → chọn **Khách sạn Malibu** → bấm *"Nhờ Lisa soạn tin hỏi"* → màn Handoff hiện tin đã soạn đầy đủ ngày, số người, ngân sách → bấm **"Mở chat"** → Zalo mở đúng chat Malibu, ô soạn thảo **đã có sẵn nội dung**.
+Zino đưa danh sách → mở Mini App tab **Đối tác** → chọn **Khách sạn Malibu** → bấm *"Nhờ Zino soạn tin hỏi"* → màn Handoff hiện tin đã soạn đầy đủ ngày, số người, ngân sách → bấm **"Mở chat"** → Zalo mở đúng chat Malibu, ô soạn thảo **đã có sẵn nội dung**.
 
 **Nói ngay tại đây** (giám khảo Zalo chắc chắn sẽ hỏi):
 
-> *"Zalo không có API cho bot nhắn thay user — và điều đó đúng, nó bảo vệ người dùng. Lisa không lách. Lisa soạn hộ câu hỏi hoàn chỉnh, quyền bấm Gửi vẫn là của bạn."*
+> *"Zalo không có API cho bot nhắn thay user — và điều đó đúng, nó bảo vệ người dùng. Zino không lách. Zino soạn hộ câu hỏi hoàn chỉnh, quyền bấm Gửi vẫn là của bạn."*
 
 **Trạng thái:** ❓ phải test trên điện thoại — `openChat` không chạy trên desktop.
 
 ### 2:45 — Đọc hoá đơn
 
-Gửi ảnh hoá đơn vào nhóm. Lisa đọc đúng tổng tiền, ghi chi phí, chia đầu người.
+Gửi ảnh hoá đơn vào nhóm. Zino đọc đúng tổng tiền, ghi chi phí, chia đầu người.
 
 **Chứng minh:** không dùng dịch vụ OCR. Claude vision hiểu ngữ cảnh — biết "Tổng cộng" mới là số cần lấy, "VAT" không phải món ăn.
 
@@ -75,7 +75,7 @@ Gửi ảnh hoá đơn vào nhóm. Lisa đọc đúng tổng tiền, ghi chi ph�
 
 ### 3:15 — Ảnh kỷ niệm
 
-Gửi ảnh phong cảnh → vào album Mini App kèm caption Lisa tự viết.
+Gửi ảnh phong cảnh → vào album Mini App kèm caption Zino tự viết.
 
 **Trạng thái:** ❓ chưa test.
 
@@ -93,7 +93,7 @@ Bảng ai chuyển cho ai, **số giao dịch tối thiểu**.
 
 > *"Tổng kết chuyến đi giúp mình"*
 
-~60 giây sau Lisa gửi link `zah-35.123c.vn/trip/<id>/` — trang web có timeline, gallery, bảng chi tiêu.
+~60 giây sau Zino gửi link `zah-35.123c.vn/trip/<id>/` — trang web có timeline, gallery, bảng chi tiêu.
 
 **Trạng thái:** ❓ chưa test.
 
@@ -101,7 +101,7 @@ Bảng ai chuyển cho ai, **số giao dịch tối thiểu**.
 
 Mở `docs/PARTNER-NETWORK.md`, chỉ vào sơ đồ.
 
-> *"Bước tiếp theo: khi khách sạn uỷ quyền OA cho Lisa, câu trả lời của họ tự động quay về nhóm chat — user chỉ bấm Gửi đúng một lần. Chúng em đã implement đủ OAuth v4 PKCE, webhook OA và merchant agent; code trong repo. Chỉ vướng bước Zalo duyệt ứng dụng, mất vài ngày."*
+> *"Bước tiếp theo: khi khách sạn uỷ quyền OA cho Zino, câu trả lời của họ tự động quay về nhóm chat — user chỉ bấm Gửi đúng một lần. Chúng em đã implement đủ OAuth v4 PKCE, webhook OA và merchant agent; code trong repo. Chỉ vướng bước Zalo duyệt ứng dụng, mất vài ngày."*
 
 **Trạng thái:** ✅ code có thật · ❌ chưa chạy được do `error -14029`.
 

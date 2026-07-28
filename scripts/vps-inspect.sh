@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recon VPS: in ra mọi thứ cần biết về máy BTC cấp + verdict "đủ chạy Lisa chưa".
+# Recon VPS: in ra mọi thứ cần biết về máy BTC cấp + verdict "đủ chạy Zino chưa".
 # CHỈ ĐỌC — không cài, không sửa, không mở port. An toàn chạy nhiều lần.
 #
 # Dùng:  scp scripts/vps-inspect.sh user@VPS:/tmp/ && ssh user@VPS 'bash /tmp/vps-inspect.sh'
@@ -178,7 +178,7 @@ kv "authorized_keys" "$( [ -f "$HOME/.ssh/authorized_keys" ] && wc -l < "$HOME/.
 kv "sudo users"  "$(getent group sudo 2>/dev/null | cut -d: -f4)"
 kv "login gần đây" "$(last -n 3 2>/dev/null | head -3 | tr '\n' '|')"
 
-h "11. Ước lượng tài nguyên stack Lisa"
+h "11. Ước lượng tài nguyên stack Zino"
 cat <<'EST'
     postgres:16-alpine   ~150 MB RAM   ~250 MB disk
     api (NestJS)         ~200 MB RAM   ~300 MB disk

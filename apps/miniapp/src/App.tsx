@@ -19,7 +19,7 @@ export default function App() {
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/partners" element={<PartnersPage />} />
-          {/* Concierge Handoff — Lisa soạn tin, user bấm gửi sang OA đối tác */}
+          {/* Concierge Handoff — Zino soạn tin, user bấm gửi sang OA đối tác */}
           <Route path="/handoff" element={<HandoffPage />} />
         </Routes>
       </main>

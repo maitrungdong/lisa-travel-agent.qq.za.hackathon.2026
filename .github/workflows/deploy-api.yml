@@ -80,7 +80,7 @@ jobs:
       name: ${{ inputs.environment || 'development' }}
       url: ${{ vars.API_BASE_URL }}
     steps:
-      # Deploy lên VPS: SSH vào host, cập nhật API_IMAGE trong /opt/lisa/.env
+      # Deploy lên VPS: SSH vào host, cập nhật API_IMAGE trong /opt/zino/.env
       # rồi docker compose pull + up. Image được pin theo commit SHA (immutable)
       # → rollback = re-run workflow ở commit cũ.
       #
@@ -106,7 +106,7 @@ jobs:
               -p "${PORT:-22}" "$SSH_USER@$HOST" \
               "GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' IMAGE='$IMAGE' bash -s" <<'REMOTE'
           set -euo pipefail
-          cd /opt/lisa
+          cd /opt/zino
           if [ -n "${GHCR_TOKEN:-}" ]; then
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           fi

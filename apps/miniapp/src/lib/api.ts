@@ -137,7 +137,7 @@ export const api = {
 };
 
 /**
- * Chuyến đi đang xem: ưu tiên `?trip=<id>` trên URL (Lisa gửi link kèm id),
+ * Chuyến đi đang xem: ưu tiên `?trip=<id>` trên URL (Zino gửi link kèm id),
  * không có thì lấy chuyến mới nhất.
  */
 export async function resolveActiveTrip(): Promise<number | null> {

@@ -15,7 +15,7 @@ export interface ResolvedConversation {
   seenCount: number;
   /** true nếu đây là lần đầu tiên hệ thống thấy nhóm này */
   isNew: boolean;
-  /** true nếu nhóm quay lại sau khoảng lặng dài → Lisa nên chào theo kiểu người quen */
+  /** true nếu nhóm quay lại sau khoảng lặng dài → Zino nên chào theo kiểu người quen */
   isReturning: boolean;
   memory: string;
 }
@@ -109,7 +109,7 @@ export class ConversationService {
     await this.db.insert(messages).values({
       conversationId,
       role: "assistant",
-      senderName: "Lisa",
+      senderName: "Zino",
       text
     });
   }

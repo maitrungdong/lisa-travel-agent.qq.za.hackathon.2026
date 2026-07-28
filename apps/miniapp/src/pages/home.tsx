@@ -20,9 +20,9 @@ export default function HomePage() {
     <div className="space-y-4">
       <header className="rounded-lg bg-primary p-5 text-primary-foreground">
         <p className="text-sm/relaxed opacity-80">Xin chào{user ? `, ${user.name}` : ""} 👋</p>
-        <h1 className="mt-1 text-xl font-bold">Lisa – Trợ lý du lịch của nhóm</h1>
+        <h1 className="mt-1 text-xl font-bold">Zino – Trợ lý nhu cầu của nhóm</h1>
         <p className="mt-2 flex items-center gap-1.5 text-sm opacity-90">
-          <Sparkles size={16} /> Nhắn “@Lisa” trong nhóm Zalo để lên kế hoạch
+          <Sparkles size={16} /> Nhắn “@Zino” trong nhóm Zalo để lên kế hoạch
         </p>
       </header>
 
@@ -46,7 +46,7 @@ export default function HomePage() {
         ))}
         {!error && trips.length === 0 && (
           <Card><CardContent className="py-4 text-sm text-muted-foreground">
-            Chưa có chuyến đi nào. Hãy rủ Lisa lên kế hoạch trong nhóm Zalo!
+            Chưa có chuyến đi nào. Hãy rủ Zino lên kế hoạch trong nhóm Zalo!
           </CardContent></Card>
         )}
       </section>

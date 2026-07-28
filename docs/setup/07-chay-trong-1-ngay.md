@@ -1,4 +1,4 @@
-# Runbook — đưa Lisa lên VPS trong 1 ngày
+# Runbook — đưa Zino lên VPS trong 1 ngày
 
 > Làm tuần tự từ trên xuống. Mỗi bước có lệnh verify — **đừng sang bước sau khi bước
 > trước chưa xanh**. Tổng thời gian ~60–90 phút nếu không vướng gì.
@@ -17,7 +17,7 @@ Thông tin cố định:
 ## Bước 0 — Chuẩn bị ở máy dev (5 phút)
 
 ```bash
-# (ở máy dev, trong monorepo thì là projects/lisa-travel-agent)
+# (ở máy dev, trong monorepo thì là projects/zino-travel-agent)
 
 # Sinh 3 khoá bí mật, chép ra chỗ nào đó, lát nữa dán vào .env trên VPS
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
@@ -35,16 +35,16 @@ Chuẩn bị sẵn 2 thứ nữa: **`ZALO_BOT_TOKEN`** (Zalo Bot Manager → bot
 ```bash
 ssh -p 2222 zah19-team35@118.102.2.135
 
-git clone https://github.com/maitrungdong/lisa-travel-agent.qq.za.hackathon.2026 ~/lisa
-cd ~/lisa
+git clone https://github.com/maitrungdong/zino-travel-agent.qq.za.hackathon.2026 ~/zino
+cd ~/zino
 bash scripts/vps-bootstrap.sh
 ```
 
-> ⚠️ `lisa-travel-agent` là repo ĐỘC LẬP, không phải thư mục con của monorepo.
-> Sau khi clone, gốc repo nằm thẳng ở `~/lisa` — **không có** `~/lisa/projects/...`.
+> ⚠️ `zino-travel-agent` là repo ĐỘC LẬP, không phải thư mục con của monorepo.
+> Sau khi clone, gốc repo nằm thẳng ở `~/zino` — **không có** `~/zino/projects/...`.
 
 Script làm 6 việc: đổi timezone → `Asia/Ho_Chi_Minh`, cài Docker CE, cài rsync,
-tạo `/opt/lisa/{media,recap}`, cài `lisa.conf` vào nginx rồi **reload nóng**, mở firewalld.
+tạo `/opt/zino/{media,recap}`, cài `zino.conf` vào nginx rồi **reload nóng**, mở firewalld.
 
 > ⛔ **Rủi ro lớn nhất ở đây là nginx.** nginx là của BTC, đang phục vụ các team khác.
 > Script chỉ THÊM 1 file conf và chỉ reload khi `nginx -t` pass; fail thì tự khôi phục
@@ -56,7 +56,7 @@ tạo `/opt/lisa/{media,recap}`, cài `lisa.conf` vào nginx rồi **reload nón
 timedatectl | grep "Time zone"        # phải là Asia/Ho_Chi_Minh
 docker --version && docker compose version
 sudo nginx -t                          # syntax is ok / test is successful
-ls -ld /opt/lisa/media /opt/lisa/recap # owner 1000:1000
+ls -ld /opt/zino/media /opt/zino/recap # owner 1000:1000
 ```
 
 ---
@@ -64,23 +64,23 @@ ls -ld /opt/lisa/media /opt/lisa/recap # owner 1000:1000
 ## Bước 2 — Cấu hình & khởi động (10 phút)
 
 ```bash
-sudo mkdir -p /opt/lisa && sudo chown $USER /opt/lisa
-cp ~/lisa/infra/docker-compose.yml ~/lisa/infra/.env.example /opt/lisa/
+sudo mkdir -p /opt/zino && sudo chown $USER /opt/zino
+cp ~/zino/infra/docker-compose.yml ~/zino/infra/.env.example /opt/zino/
 ```
 
 Build image tại chỗ — không cần GHCR, không cần đăng nhập registry:
 
 ```bash
-cd ~/lisa/apps/api && docker build -t lisa-api:local .
+cd ~/zino/apps/api && docker build -t zino-api:local .
 ```
 
 Rồi tạo `.env` bằng heredoc. **Không dùng vi/nano** — dán 1 khối, ít sai hơn:
 
 ```bash
-cd /opt/lisa
+cd /opt/zino
 cat > .env <<'EOF'
 POSTGRES_PASSWORD=
-API_IMAGE=lisa-api:local
+API_IMAGE=zino-api:local
 AGENT_API_KEY=
 ZALO_BOT_TOKEN=
 ZALO_WEBHOOK_SECRET=
@@ -100,7 +100,7 @@ grep -E '^[A-Z_]+=$' .env && echo "⚠️ CÒN BIẾN RỖNG" || echo "✅ đã 
 ```
 
 ```bash
-cd /opt/lisa && docker compose up -d
+cd /opt/zino && docker compose up -d
 docker compose logs -f api        # chờ dòng "Schema đã đồng bộ" + "API listening on :3000"
 ```
 
@@ -169,7 +169,7 @@ docker compose exec api node -e "require('./dist/db/seed-partners.js')" \
 
 ```bash
 # trên máy Mac, trong monorepo
-cd projects/lisa-travel-agent/apps/miniapp
+cd projects/zino-travel-agent/apps/miniapp
 cp .env.example .env       # đặt VITE_API_BASE_URL=<PUBLIC_BASE_URL>/api
 cd ../.. && pnpm install
 pnpm --filter miniapp build
@@ -185,7 +185,7 @@ Màn quan trọng nhất là `/handoff` — Concierge Handoff. Test bằng cách
 https://zalo.me/s/<APP_ID>/#/handoff?oa=<OA_ID>&name=Sunrise%20Resort&msg=Ch%C3%A0o%20shop
 ```
 
-**Nếu Mini App chưa sẵn sàng:** không sao, hệ thống vẫn chạy đủ luồng. Lisa sẽ gửi
+**Nếu Mini App chưa sẵn sàng:** không sao, hệ thống vẫn chạy đủ luồng. Zino sẽ gửi
 đoạn tin đã soạn + link `zalo.me/<oa_id>` vào chat để user copy-paste. Mất độ mượt,
 không mất luồng.
 
@@ -197,7 +197,7 @@ Nhắn lần lượt vào nhóm có bot, kiểm tra từng cái:
 
 | # | Nhắn gì | Kỳ vọng |
 |---|---|---|
-| 1 | "chào bạn" | Lisa giới thiệu, có "đang soạn tin…" trước đó |
+| 1 | "chào bạn" | Zino giới thiệu, có "đang soạn tin…" trước đó |
 | 2 | "nhóm mình đi Đà Nẵng 12–14/8, 6 người, 3tr/người" | Hỏi lại cho đủ → `create_trip` |
 | 3 | "lên lịch trình giúp mình" | Nói "để mình research chút nha" rồi **~60s sau tự nhắn** lịch trình |
 | 4 | "tìm chỗ ở gần biển" | Ra 3 OA + link handoff |
@@ -206,12 +206,12 @@ Nhắn lần lượt vào nhóm có bot, kiểm tra từng cái:
 | 7 | "nhắc mình 7h sáng mai check-in" | Đặt reminder → **verify bằng cách sửa `fire_at` trong DB về 1 phút sau** |
 | 8 | "chia tiền" | Bảng ai nợ ai, số giao dịch tối thiểu |
 | 9 | "tổng kết chuyến đi" | ~60s sau gửi link `/trip/<id>/` |
-| 10 | Đợi >10 phút rồi nhắn lại | Lisa nhớ sở thích nhóm (reflection đã chạy) |
+| 10 | Đợi >10 phút rồi nhắn lại | Zino nhớ sở thích nhóm (reflection đã chạy) |
 
 Kiểm tra reminder mà không phải chờ tới sáng:
 
 ```bash
-docker compose exec postgres psql -U lisa -d lisa \
+docker compose exec postgres psql -U zino -d zino \
   -c "UPDATE reminders SET fire_at = now() + interval '30 seconds' WHERE sent = false;"
 ```
 
@@ -226,20 +226,20 @@ docker compose exec postgres psql -U lisa -d lisa \
 | Cert invalid khi Zalo gọi webhook | Dùng subdomain 2 cấp | Domain **phải** là `zah-35.123c.vn` |
 | Reminder lệch giờ | Timezone | `timedatectl set-timezone Asia/Ho_Chi_Minh` rồi `docker compose restart` |
 | Ảnh gửi ra không hiện | `PUBLIC_BASE_URL` sai hoặc `/media/` chưa serve | `curl -I https://zah-35.123c.vn/media/<file>` |
-| Lisa trả lời chậm >10s | web_search chạy trong hot path | Bình thường nếu có tra cứu; nếu mọi lượt đều chậm, xem log tool |
+| Zino trả lời chậm >10s | web_search chạy trong hot path | Bình thường nếu có tra cứu; nếu mọi lượt đều chậm, xem log tool |
 | Job kẹt `running` | Worker chết giữa chừng | Tự thu hồi sau 5 phút; muốn ngay: `UPDATE jobs SET status='pending' WHERE status='running'` |
 
 **Rollback nginx** (nếu lỡ làm hỏng):
 
 ```bash
-sudo rm /etc/nginx/conf.d/lisa.conf && sudo nginx -t && sudo systemctl reload nginx
+sudo rm /etc/nginx/conf.d/zino.conf && sudo nginx -t && sudo systemctl reload nginx
 ```
 
 **Xem log:**
 
 ```bash
 docker compose logs -f --tail 100 api
-docker compose exec postgres psql -U lisa -d lisa -c \
+docker compose exec postgres psql -U zino -d zino -c \
   "SELECT id,kind,status,attempts,left(last_error,80) FROM jobs ORDER BY id DESC LIMIT 20;"
 ```
 

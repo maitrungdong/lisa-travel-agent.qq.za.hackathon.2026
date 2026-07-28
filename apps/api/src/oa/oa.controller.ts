@@ -100,9 +100,9 @@ export class OaController {
     res.send(
       page(
         "Kết nối thành công 🎉",
-        `<b>${escapeHtml(name)}</b> đã gia nhập mạng lưới Lisa.<br><br>` +
-          `Từ giờ khi khách hỏi qua Lisa, OA của bạn sẽ nhận được lead và ` +
-          `Lisa trả lời tự động trong vài giây — bằng đúng dữ liệu bạn cung cấp.` +
+        `<b>${escapeHtml(name)}</b> đã gia nhập mạng lưới Zino.<br><br>` +
+          `Từ giờ khi khách hỏi qua Zino, OA của bạn sẽ nhận được lead và ` +
+          `Zino trả lời tự động trong vài giây — bằng đúng dữ liệu bạn cung cấp.` +
           `<div class="meta">OA ID: ${escapeHtml(resolvedOaId)}${
             profile?.num_follower ? ` · ${profile.num_follower} người quan tâm` : ""
           }</div>`
@@ -145,7 +145,7 @@ export class OaController {
       return;
     }
 
-    // Nối lead về hội thoại Lisa gần nhất — đây là chỗ khép vòng lặp.
+    // Nối lead về hội thoại Zino gần nhất — đây là chỗ khép vòng lặp.
     // Hackathon quy mô nhỏ nên lấy hội thoại hoạt động gần nhất là đủ chính xác;
     // production nên gắn token định danh vào tin soạn sẵn của draft_oa_inquiry.
     const [recent] = await this.db
@@ -206,7 +206,7 @@ export class OaController {
       connectedPartners: connected.length,
       hint:
         missing.length > 0
-          ? `Thiếu ${missing.join(", ")} trong /opt/lisa/.env → thêm rồi 'docker compose up -d'`
+          ? `Thiếu ${missing.join(", ")} trong /opt/zino/.env → thêm rồi 'docker compose up -d'`
           : "Cấu hình đủ. Mở startHere bằng tài khoản quản trị OA để uỷ quyền."
     };
   }
@@ -270,7 +270,7 @@ function escapeHtml(s: string): string {
 function page(title: string, body: string): string {
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)} · Lisa</title><style>
+<title>${escapeHtml(title)} · Zino</title><style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;
 justify-content:center;padding:24px;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 background:linear-gradient(160deg,#0f766e,#0891b2);color:#0f172a}

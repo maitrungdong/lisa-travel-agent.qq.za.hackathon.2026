@@ -25,7 +25,7 @@ export type Database = NodePgDatabase<typeof schema>;
       provide: DB,
       useFactory: (): Database => {
         const pool = new Pool({
-          connectionString: process.env.DATABASE_URL ?? "postgres://lisa:lisa@localhost:5432/lisa"
+          connectionString: process.env.DATABASE_URL ?? "postgres://zino:zino@localhost:5432/zino"
         });
         return drizzle(pool, { schema });
       }

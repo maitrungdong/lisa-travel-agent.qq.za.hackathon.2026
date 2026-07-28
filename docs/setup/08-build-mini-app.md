@@ -28,7 +28,7 @@ vite build   ──push──► Mini App (file tĩnh)  ──gọi──► API
 
 > ⚠️ **Chưa có Mini App trên developers.zalo.me?** Phải đăng ký app trước — đây là
 > phần mất thời gian nhất và không tự động hoá được. Nếu không kịp, **bỏ Mini App
-> khỏi scope**: Lisa vẫn chạy đủ 3 pha qua chat, chỉ mất phần `openChat` điền sẵn.
+> khỏi scope**: Zino vẫn chạy đủ 3 pha qua chat, chỉ mất phần `openChat` điền sẵn.
 
 ---
 
@@ -38,11 +38,11 @@ vite build   ──push──► Mini App (file tĩnh)  ──gọi──► API
 gọi nhầm server và không có cách sửa nào ngoài build lại.
 
 ```bash
-cd projects/lisa-travel-agent
+cd projects/zino-travel-agent
 
 # Lấy thẳng từ VPS cho khỏi gõ nhầm
 BASE=$(ssh -p 2222 zah19-team35@118.102.2.135 \
-  "grep '^PUBLIC_BASE_URL=' /opt/lisa/.env | cut -d= -f2-")
+  "grep '^PUBLIC_BASE_URL=' /opt/zino/.env | cut -d= -f2-")
 echo "BASE = $BASE"
 
 # Ghi vào .env của miniapp — giữ nguyên các dòng khác nếu file đã tồn tại
@@ -77,7 +77,7 @@ cd apps/miniapp
 
 ZMP_APP_ID=<app_id> \
 ZMP_TOKEN=<token> \
-ZMP_DESCRIPTION="Lisa hackathon demo" \
+ZMP_DESCRIPTION="Zino hackathon demo" \
 node ../../scripts/zmp-deploy.mjs
 ```
 
@@ -110,9 +110,9 @@ Kiểm tra lần lượt:
 |---|---|
 | Trang chủ | Hiện chuyến đi. Trống → `VITE_API_BASE_URL` sai hoặc chưa có chuyến |
 | Đối tác | Danh sách OA. Trống → chưa seed `partner_oas` |
-| Handoff | Bấm "Nhờ Lisa soạn tin" → hiện tin đã soạn → **"Mở chat"** mở đúng chat OA |
+| Handoff | Bấm "Nhờ Zino soạn tin" → hiện tin đã soạn → **"Mở chat"** mở đúng chat OA |
 | Chi phí | Tổng chi + ai nợ ai |
-| Kỷ niệm | Ảnh Lisa gom từ nhóm |
+| Kỷ niệm | Ảnh Zino gom từ nhóm |
 
 ⚠️ **`openChat` chỉ chạy trong app Zalo thật.** Mở trên trình duyệt desktop sẽ
 báo "chức năng này chỉ chạy trong ứng dụng Zalo" và hiện nút Copy + link dự phòng.
@@ -129,7 +129,7 @@ Test bằng điện thoại.
 | `Thiếu mô tả phiên bản` | Zalo bắt buộc trường này | Thêm `ZMP_DESCRIPTION="..."` |
 | `www không tồn tại hoặc rỗng` | Chưa build | Chạy bước 2 |
 | App mở được nhưng không có dữ liệu | `VITE_API_BASE_URL` sai | Mở DevTools xem request đi đâu, sửa rồi **build lại** |
-| CORS bị chặn | API chưa cho phép origin | Thêm `https://h5.zdn.vn` vào `CORS_ORIGINS` trong `/opt/lisa/.env` |
+| CORS bị chặn | API chưa cho phép origin | Thêm `https://h5.zdn.vn` vào `CORS_ORIGINS` trong `/opt/zino/.env` |
 | Đổi URL API mà app vẫn gọi URL cũ | Bundle đã inline URL cũ | Build lại — sửa `.env` không đủ |
 
 **Bẫy hay gặp nhất:** đổi `VITE_API_BASE_URL` rồi deploy luôn mà quên build lại.

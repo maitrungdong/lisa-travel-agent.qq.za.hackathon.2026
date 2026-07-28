@@ -18,6 +18,14 @@ export interface ToolContext {
   setActiveTrip: (tripId: number) => void;
   /** Đưa job vào hàng đợi (deep_plan, recap...) */
   enqueue: (kind: string, payload: Record<string, unknown>, runAt?: Date) => Promise<void>;
+  /**
+   * Xếp một tin trả lời vào hàng chờ gửi.
+   *
+   * Backend gộp nhiều tin đến gần nhau thành MỘT lượt agent. Agent là bên
+   * quyết định gộp hay tách câu trả lời — việc này cần hiểu ngữ nghĩa nên
+   * không thể để backend làm.
+   */
+  queueReply: (text: string, to?: string) => void;
 }
 
 /**

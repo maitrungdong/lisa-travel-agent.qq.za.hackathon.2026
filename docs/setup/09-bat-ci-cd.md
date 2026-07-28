@@ -46,7 +46,7 @@ done
 
 ```bash
 API_BASE=$(ssh -p 2222 zah19-team35@118.102.2.135 \
-  "grep '^PUBLIC_BASE_URL=' /opt/lisa/.env | tail -1 | cut -d= -f2-")
+  "grep '^PUBLIC_BASE_URL=' /opt/zino/.env | tail -1 | cut -d= -f2-")
 
 gh variable set API_BASE_URL --env development --body "$API_BASE/api"
 gh variable set API_BASE_URL --env production  --body "$API_BASE/api"
@@ -71,9 +71,9 @@ gh secret set GHCR_PULL_TOKEN --body "<PAT có scope read:packages>"
 Chưa có SSH key thì tạo và cài lên VPS trước:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/lisa_vps -N ""
-ssh-copy-id -i ~/.ssh/lisa_vps.pub -p 2222 zah19-team35@118.102.2.135
-gh secret set VPS_SSH_KEY < ~/.ssh/lisa_vps
+ssh-keygen -t ed25519 -f ~/.ssh/zino_vps -N ""
+ssh-copy-id -i ~/.ssh/zino_vps.pub -p 2222 zah19-team35@118.102.2.135
+gh secret set VPS_SSH_KEY < ~/.ssh/zino_vps
 ```
 
 ## Bước 3 — Kiểm tra đã đủ chưa

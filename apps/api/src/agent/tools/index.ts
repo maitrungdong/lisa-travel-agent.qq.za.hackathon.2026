@@ -5,7 +5,7 @@ import { partnerTools } from "./partner.tools";
 import { tripTools } from "./trip.tools";
 import { S, schema, type ToolDef } from "./types";
 
-/** Bộ nhớ dài hạn — Lisa chủ động ghi khi phát hiện điều đáng nhớ về nhóm. */
+/** Bộ nhớ dài hạn — Zino chủ động ghi khi phát hiện điều đáng nhớ về nhóm. */
 const memoryTools: ToolDef[] = [
   {
     name: "remember",
@@ -61,7 +61,7 @@ const memoryTools: ToolDef[] = [
 ];
 
 /**
- * Việc chạy lâu (30-120s) → đẩy sang worker chạy nền, Lisa kết thúc lượt ngay.
+ * Việc chạy lâu (30-120s) → đẩy sang worker chạy nền, Zino kết thúc lượt ngay.
  * Kết quả sẽ được PUSH CHỦ ĐỘNG về nhóm khi xong.
  *
  * Bot API không có cửa sổ 48h như OA nên push chủ động hoạt động.
@@ -132,13 +132,51 @@ const asyncTools: ToolDef[] = [
   }
 ];
 
-/** Toàn bộ tool Lisa dùng được. */
+/**
+ * Điều phối câu trả lời khi nhiều người nhắn cùng lúc.
+ *
+ * Backend gộp các tin đến gần nhau thành một lượt. Quyết định "gộp hay tách
+ * câu trả lời" là quyết định NGỮ NGHĨA — chỉ agent làm được, vì nó phải hiểu
+ * các yêu cầu có liên quan tới nhau không.
+ */
+const replyTools: ToolDef[] = [
+  {
+    name: "reply",
+    description:
+      "Gửi MỘT tin trả lời vào nhóm. Dùng khi có nhiều người hỏi cùng lúc và bạn muốn " +
+      "TÁCH thành nhiều tin riêng cho dễ theo dõi.\n\n" +
+      "Nguyên tắc tách:\n" +
+      "• Các yêu cầu LIÊN QUAN nhau (cùng chủ đề, bổ sung cho nhau) → gộp một tin duy nhất\n" +
+      "• Các yêu cầu ĐỘC LẬP (người hỏi chỗ ở, người hỏi chia tiền) → mỗi việc một tin, " +
+      "mở đầu bằng tên người hỏi để họ biết đang trả lời ai\n" +
+      "• Chỉ một người nhắn, hoặc mọi thứ cùng một chủ đề → KHÔNG cần gọi tool này, " +
+      "cứ trả lời bình thường bằng văn bản\n\n" +
+      "Gọi nhiều lần để gửi nhiều tin. Tin sẽ được gửi theo đúng thứ tự bạn gọi.",
+    input_schema: schema(
+      {
+        text: S.str("Nội dung tin nhắn. Plain text, dưới 2000 ký tự."),
+        to: S.str("Tên người mà tin này trả lời — dùng khi tách theo từng người")
+      },
+      ["text"]
+    ),
+    handler: async (input, ctx) => {
+      const text = String(input.text ?? "").trim();
+      if (!text) return { ok: false, error: "text rỗng" };
+
+      ctx.queueReply(text, input.to?.trim() || undefined);
+      return { ok: true, queued: true, length: text.length };
+    }
+  }
+];
+
+/** Toàn bộ tool Zino dùng được. */
 export const allTools: ToolDef[] = [
   ...tripTools,
   ...moneyTools,
   ...partnerTools,
   ...memoryTools,
-  ...asyncTools
+  ...asyncTools,
+  ...replyTools
 ];
 
 export const toolMap = new Map(allTools.map((t) => [t.name, t]));
@@ -160,11 +198,19 @@ export const toolMap = new Map(allTools.map((t) => [t.name, t]));
  * chứ đừng bật cả loạt.
  */
 export function toolsForApi() {
-  return allTools.map((t) => ({
+  const defs = allTools.map((t) => ({
     name: t.name,
     description: t.description,
     input_schema: t.input_schema
   }));
+
+  // Đánh dấu cache ở TOOL CUỐI CÙNG → toàn bộ ~1.900 token định nghĩa tool
+  // trở thành tiền tố được cache. Anthropic cache theo tiền tố, nên breakpoint
+  // đặt ở cuối khối là cách gói trọn cả khối.
+  if (defs.length > 0) {
+    (defs[defs.length - 1] as Record<string, unknown>).cache_control = { type: "ephemeral" };
+  }
+  return defs;
 }
 
 export * from "./types";

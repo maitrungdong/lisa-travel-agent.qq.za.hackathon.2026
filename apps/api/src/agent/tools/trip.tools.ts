@@ -285,12 +285,12 @@ export const tripTools: ToolDef[] = [
   {
     name: "set_reminder",
     description:
-      "Đặt nhắc nhở chủ động — Lisa sẽ tự nhắn vào nhóm đúng giờ đó, kể cả khi không ai hỏi. " +
+      "Đặt nhắc nhở chủ động — Zino sẽ tự nhắn vào nhóm đúng giờ đó, kể cả khi không ai hỏi. " +
       "Dùng để nhắc mốc lịch trình tiếp theo, nhắc check-in, nhắc chuẩn bị đồ.",
     input_schema: schema(
       {
         fire_at: S.date("Thời điểm gửi nhắc nhở"),
-        message: S.str("Nội dung sẽ nhắn vào nhóm — viết như Lisa đang nói")
+        message: S.str("Nội dung sẽ nhắn vào nhóm — viết như Zino đang nói")
       },
       ["fire_at", "message"]
     ),

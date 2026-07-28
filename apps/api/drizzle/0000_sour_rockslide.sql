@@ -12,7 +12,7 @@ CREATE TABLE "events" (
 	"title" text NOT NULL,
 	"starts_at" timestamp with time zone NOT NULL,
 	"location" text,
-	"created_by" varchar(64) DEFAULT 'lisa' NOT NULL,
+	"created_by" varchar(64) DEFAULT 'zino' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

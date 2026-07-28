@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  vps-bootstrap.sh — chuẩn bị VPS (Rocky Linux 9) để chạy Lisa Travel Agent.
+#  vps-bootstrap.sh — chuẩn bị VPS (Rocky Linux 9) để chạy Zino Travel Agent.
 #
 #  CHẠY TRÊN VPS, không phải máy dev:
 #      ssh -p 2222 zah19-team35@118.102.2.135
-#      git clone <repo> ~/lisa && cd ~/lisa
+#      git clone <repo> ~/zino && cd ~/zino
 #      bash scripts/vps-bootstrap.sh
 #
 #  Idempotent — chạy lại bao nhiêu lần cũng được, không hỏng gì.
@@ -13,8 +13,8 @@
 #    1. Đổi timezone → Asia/Ho_Chi_Minh   (VPS đang là America/New_York!)
 #    2. Cài Docker CE + compose v2 (repo CentOS 9 của Docker), enable + start
 #    3. Cài rsync (deploy.sh cần rsync ở CẢ HAI đầu)
-#    4. Tạo /opt/lisa/{media,recap,certs} đúng owner cho container node (uid 1000)
-#    5. Cài /etc/nginx/conf.d/lisa.conf rồi RELOAD nginx — chỉ khi `nginx -t` PASS
+#    4. Tạo /opt/zino/{media,recap,certs} đúng owner cho container node (uid 1000)
+#    5. Cài /etc/nginx/conf.d/zino.conf rồi RELOAD nginx — chỉ khi `nginx -t` PASS
 #    6. Mở 80/443 trên firewalld (nếu firewalld đang chạy)
 #
 #  ⛔ NGUYÊN TẮC AN TOÀN — nginx là của BTC, đang phục vụ các team khác:
@@ -23,16 +23,16 @@
 #     phục nguyên trạng rồi DỪNG — không bao giờ reload một config sai.
 #
 #  Biến môi trường tuỳ chọn:
-#     LISA_NGINX_CONF=/duong/dan/lisa.conf   chỉ định file conf nguồn
-#     LISA_SKIP_NGINX=1                      bỏ qua hẳn bước nginx
-#     LISA_TZ=Asia/Ho_Chi_Minh               đổi timezone đích
+#     ZINO_NGINX_CONF=/duong/dan/zino.conf   chỉ định file conf nguồn
+#     ZINO_SKIP_NGINX=1                      bỏ qua hẳn bước nginx
+#     ZINO_TZ=Asia/Ho_Chi_Minh               đổi timezone đích
 # =============================================================================
 set -euo pipefail
 
 # ---- Hằng số ---------------------------------------------------------------
-DEPLOY_DIR=/opt/lisa
-TARGET_TZ="${LISA_TZ:-Asia/Ho_Chi_Minh}"
-NGINX_DEST=/etc/nginx/conf.d/lisa.conf
+DEPLOY_DIR=/opt/zino
+TARGET_TZ="${ZINO_TZ:-Asia/Ho_Chi_Minh}"
+NGINX_DEST=/etc/nginx/conf.d/zino.conf
 NGINX_BTC_CONF=/etc/nginx/conf.d/star.123c.vn.conf
 CERT_PEM=/etc/nginx/certs/123c.vn.pem
 CERT_KEY_GUESS=/etc/nginx/certs/123c.vn.key
@@ -59,7 +59,7 @@ if [ "$(id -u)" != 0 ]; then
   SUDO="sudo"
 fi
 
-# User sở hữu /opt/lisa. Container api chạy user `node` = uid 1000; user
+# User sở hữu /opt/zino. Container api chạy user `node` = uid 1000; user
 # zah19-team35 trên VPS cũng uid 1000 → trùng nhau nên cả 2 phía cùng ghi được.
 TARGET_USER="${SUDO_USER:-$(id -un)}"
 APP_UID="$(id -u "$TARGET_USER" 2>/dev/null || echo 1000)"
@@ -166,7 +166,7 @@ fi
 command -v rsync >/dev/null || die "rsync vẫn chưa có — deploy.sh sẽ không chạy được."
 
 # =============================================================================
-# 4. THƯ MỤC /opt/lisa
+# 4. THƯ MỤC /opt/zino
 # =============================================================================
 step "4/6 · Thư mục $DEPLOY_DIR"
 [ "$APP_UID" = 1000 ] || warn "uid của $TARGET_USER là $APP_UID (≠1000). Container api chạy uid 1000 → nếu ghi file lỗi quyền, chown lại: sudo chown -R 1000:1000 $DEPLOY_DIR/media $DEPLOY_DIR/recap"
@@ -194,18 +194,18 @@ fi
 # =============================================================================
 step "5/6 · nginx vhost zah-35.123c.vn"
 
-if [ "${LISA_SKIP_NGINX:-0}" = 1 ]; then
-  warn "LISA_SKIP_NGINX=1 → bỏ qua bước nginx"
+if [ "${ZINO_SKIP_NGINX:-0}" = 1 ]; then
+  warn "ZINO_SKIP_NGINX=1 → bỏ qua bước nginx"
 elif ! command -v nginx >/dev/null 2>&1; then
   warn "Không thấy nginx trên máy này → bỏ qua. (Theo scan thì BTC đã cài sẵn nginx?)"
 else
   # --- 5.1 Tìm file conf nguồn ---------------------------------------------
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   SRC=""
-  for c in "${LISA_NGINX_CONF:-}" \
-           "$SCRIPT_DIR/../infra/nginx/lisa.conf" \
-           "$DEPLOY_DIR/nginx/lisa.conf" \
-           "$SCRIPT_DIR/lisa.conf"; do
+  for c in "${ZINO_NGINX_CONF:-}" \
+           "$SCRIPT_DIR/../infra/nginx/zino.conf" \
+           "$DEPLOY_DIR/nginx/zino.conf" \
+           "$SCRIPT_DIR/zino.conf"; do
     if [ -n "$c" ] && [ -f "$c" ]; then
       SRC="$c"
       break
@@ -213,9 +213,9 @@ else
   done
 
   if [ -z "$SRC" ]; then
-    warn "Không tìm thấy infra/nginx/lisa.conf → BỎ QUA bước nginx."
+    warn "Không tìm thấy infra/nginx/zino.conf → BỎ QUA bước nginx."
     info "  Cách khắc phục: chạy script từ trong repo đã clone, hoặc:"
-    info "    LISA_NGINX_CONF=/duong/dan/lisa.conf bash scripts/vps-bootstrap.sh"
+    info "    ZINO_NGINX_CONF=/duong/dan/zino.conf bash scripts/vps-bootstrap.sh"
   else
     info "nguồn: $SRC"
 
@@ -257,7 +257,7 @@ else
       # Backup bản cũ (đuôi không phải .conf nên nginx không nạp nhầm)
       RESTORE=""
       if $SUDO test -f "$NGINX_DEST"; then
-        RESTORE="$BACKUP_DIR/lisa.conf.$TS.bak"
+        RESTORE="$BACKUP_DIR/zino.conf.$TS.bak"
         $SUDO cp -p "$NGINX_DEST" "$RESTORE"
         info "đã backup bản cũ: $RESTORE"
       fi
@@ -300,7 +300,7 @@ Xử lý theo thứ tự:
      rồi chạy lại với đường dẫn đúng, ví dụ:
        sudo sed -i 's|ssl_certificate_key .*;|ssl_certificate_key /duong/dan/that.key;|' $SRC
        bash scripts/vps-bootstrap.sh
-  3. Muốn bỏ qua nginx để làm tiếp phần docker: LISA_SKIP_NGINX=1 bash scripts/vps-bootstrap.sh
+  3. Muốn bỏ qua nginx để làm tiếp phần docker: ZINO_SKIP_NGINX=1 bash scripts/vps-bootstrap.sh
 EOF
 )"
       fi
@@ -342,7 +342,7 @@ printf '  %-22s %s\n' "docker.service" "$(systemctl is-active docker 2>/dev/null
 printf '  %-22s %s\n' "rsync"         "$(rsync --version 2>/dev/null | head -1 || echo 'CHƯA CÓ')"
 printf '  %-22s %s\n' "timezone"      "$(timedatectl show -p Timezone --value 2>/dev/null)  ($(date '+%Y-%m-%d %H:%M:%S %Z'))"
 printf '  %-22s %s\n' "nginx -t"      "$($SUDO nginx -t 2>&1 | tail -1)"
-printf '  %-22s %s\n' "nginx conf"    "$($SUDO test -f "$NGINX_DEST" && echo "$NGINX_DEST đã cài" || echo 'CHƯA cài lisa.conf')"
+printf '  %-22s %s\n' "nginx conf"    "$($SUDO test -f "$NGINX_DEST" && echo "$NGINX_DEST đã cài" || echo 'CHƯA cài zino.conf')"
 printf '  %-22s %s\n' "$DEPLOY_DIR"   "$(ls -ld "$DEPLOY_DIR" 2>/dev/null | awk '{print $1, $3":"$4}')"
 echo "  cổng đang nghe:"
 $SUDO ss -tulpn 2>/dev/null | awk 'NR==1 || /:(80|443|3000|5432|'"$SSH_PORT"')\s/' | sed 's/^/    /'

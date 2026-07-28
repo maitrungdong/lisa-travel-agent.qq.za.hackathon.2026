@@ -39,7 +39,7 @@ export default function ItineraryPage() {
           </li>
         ))}
         {events.length === 0 && (
-          <li className="text-sm text-muted-foreground">Lisa sẽ tự cập nhật lịch trình vào đây.</li>
+          <li className="text-sm text-muted-foreground">Zino sẽ tự cập nhật lịch trình vào đây.</li>
         )}
       </ol>
     </div>

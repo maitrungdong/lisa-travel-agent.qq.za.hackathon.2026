@@ -88,7 +88,7 @@ export class TripsService {
 
   /**
    * Chia tiền cho Mini App — dùng CHUNG hàm settleExpenses với tool của agent.
-   * Một nguồn sự thật duy nhất: nếu Lisa nói trong chat khác với màn hình Mini App
+   * Một nguồn sự thật duy nhất: nếu Zino nói trong chat khác với màn hình Mini App
    * thì mất hết uy tín, mà đó là lỗi rất dễ mắc nếu viết hai bản tính toán.
    */
   async settle(tripId: number) {

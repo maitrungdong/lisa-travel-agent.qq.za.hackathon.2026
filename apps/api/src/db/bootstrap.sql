@@ -1,5 +1,5 @@
 -- =============================================================================
---  Schema Lisa — IDEMPOTENT. Chạy được nhiều lần, chạy trên DB rỗng lẫn DB đã
+--  Schema Zino — IDEMPOTENT. Chạy được nhiều lần, chạy trên DB rỗng lẫn DB đã
 --  có migration 0000 cũ (trips/members/events/expenses/activities).
 --
 --  Vì sao không dùng drizzle-kit lúc deploy: nó cần esbuild native binary khớp
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS events (
   title      text        NOT NULL,
   starts_at  timestamptz NOT NULL,
   location   text,
-  created_by varchar(64) NOT NULL DEFAULT 'lisa',
+  created_by varchar(64) NOT NULL DEFAULT 'zino',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE events ADD COLUMN IF NOT EXISTS ends_at        timestamptz;
@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS oauth_states (
   created_at    timestamptz  NOT NULL DEFAULT now()
 );
 
--- Lead: user hỏi OA đối tác, bắt nguồn từ hội thoại Lisa.
+-- Lead: user hỏi OA đối tác, bắt nguồn từ hội thoại Zino.
 CREATE TABLE IF NOT EXISTS oa_leads (
   id                serial PRIMARY KEY,
   partner_oa_id     bigint      NOT NULL REFERENCES partner_oas(id),

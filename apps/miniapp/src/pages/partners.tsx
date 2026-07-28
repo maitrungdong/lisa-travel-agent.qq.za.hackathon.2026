@@ -73,7 +73,7 @@ export default function PartnersPage() {
 
   /**
    * Soạn sẵn câu hỏi từ ngữ cảnh chuyến đi.
-   * Trong luồng chính Lisa soạn (hay hơn, có ngữ cảnh hội thoại); đây là bản
+   * Trong luồng chính Zino soạn (hay hơn, có ngữ cảnh hội thoại); đây là bản
    * dự phòng để màn này dùng được độc lập, không phụ thuộc chat.
    */
   const draft = useMemo(() => {
@@ -123,7 +123,7 @@ Cảm ơn shop nhiều ạ!`;
             ? `Chưa có đối tác ở ${trip?.trip.destination} — đây là toàn mạng lưới`
             : trip
               ? `Gợi ý cho ${trip.trip.destination}`
-              : "Mạng lưới OA du lịch của Lisa"}
+              : "Mạng lưới OA du lịch của Zino"}
         </p>
       </header>
 
@@ -193,7 +193,7 @@ Cảm ơn shop nhiều ạ!`;
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-600 py-2.5 text-sm font-semibold text-white active:bg-sky-700"
               >
                 <MessageSquareQuote size={16} />
-                Nhờ Lisa soạn tin hỏi
+                Nhờ Zino soạn tin hỏi
               </button>
             </CardContent>
           </Card>
@@ -201,7 +201,7 @@ Cảm ơn shop nhiều ạ!`;
       </div>
 
       <p className="pb-4 text-center text-xs leading-relaxed text-muted-foreground">
-        Lisa soạn hộ câu hỏi và mở đúng cửa sổ chat.
+        Zino soạn hộ câu hỏi và mở đúng cửa sổ chat.
         <br />
         Quyền bấm Gửi luôn thuộc về bạn.
       </p>

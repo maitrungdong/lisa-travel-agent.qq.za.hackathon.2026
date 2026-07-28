@@ -13,7 +13,7 @@ import { openPartnerChat } from "../lib/zalo";
  *   nó mở đúng cửa sổ chat với OA và ĐIỀN SẴN nội dung. Tài liệu Zalo ghi rõ
  *   "việc gửi tin nhắn hay không phụ thuộc vào quyết định của người dùng."
  *
- *   Nên: Lisa soạn hộ câu hỏi đầy đủ → user đọc lại, sửa nếu muốn → bấm Gửi.
+ *   Nên: Zino soạn hộ câu hỏi đầy đủ → user đọc lại, sửa nếu muốn → bấm Gửi.
  *   Human-in-the-loop đúng nghĩa, và đó là điểm cộng khi pitch, không phải hạn chế.
  */
 export default function HandoffPage() {
@@ -57,7 +57,7 @@ export default function HandoffPage() {
     return (
       <div className="py-16 text-center text-slate-500">
         <p>Thiếu thông tin đối tác.</p>
-        <p className="mt-1 text-sm">Hãy mở màn này từ gợi ý của Lisa trong chat nhé.</p>
+        <p className="mt-1 text-sm">Hãy mở màn này từ gợi ý của Zino trong chat nhé.</p>
       </div>
     );
   }
@@ -66,7 +66,7 @@ export default function HandoffPage() {
     <div className="space-y-4">
       <header className="space-y-1">
         <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-          Lisa soạn hộ bạn
+          Zino soạn hộ bạn
         </p>
         <h1 className="text-xl font-bold text-slate-900">Nhắn cho {oaName}</h1>
         <p className="text-sm text-slate-500">
@@ -143,7 +143,7 @@ export default function HandoffPage() {
       </div>
 
       <p className="pb-4 text-center text-xs leading-relaxed text-slate-400">
-        Lisa không gửi tin thay bạn. Quyền quyết định gửi hay không luôn thuộc về bạn.
+        Zino không gửi tin thay bạn. Quyền quyết định gửi hay không luôn thuộc về bạn.
       </p>
     </div>
   );

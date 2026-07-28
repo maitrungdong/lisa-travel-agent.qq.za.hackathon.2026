@@ -44,7 +44,7 @@ export const messages = pgTable(
     conversationId: bigint("conversation_id", { mode: "number" })
       .notNull()
       .references(() => conversations.id),
-    /** message_id của Zalo — NULL với tin do Lisa chủ động gửi */
+    /** message_id của Zalo — NULL với tin do Zino chủ động gửi */
     zaloMessageId: varchar("zalo_message_id", { length: 128 }),
     role: varchar("role", { length: 16 }).notNull(), // user | assistant | system
     senderZaloId: varchar("sender_zalo_id", { length: 64 }),
@@ -82,7 +82,7 @@ export const groupMemory = pgTable(
  * TẦNG CHUYẾN ĐI (L2 — episodic) — sự thật có cấu trúc
  * ========================================================================== */
 
-/** Chuyến đi — đơn vị dữ liệu trung tâm mà Lisa và mini app cùng thao tác. */
+/** Chuyến đi — đơn vị dữ liệu trung tâm mà Zino và mini app cùng thao tác. */
 export const trips = pgTable(
   "trips",
   {
@@ -138,13 +138,13 @@ export const events = pgTable(
     note: text("note"),
     /** Chi phí ước tính (VND) — dùng để dựng ngân sách trước chuyến đi */
     estimatedCost: bigint("estimated_cost", { mode: "number" }),
-    createdBy: varchar("created_by", { length: 64 }).notNull().default("lisa"),
+    createdBy: varchar("created_by", { length: 64 }).notNull().default("zino"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (t) => [index("events_trip_idx").on(t.tripId, t.startsAt)]
 );
 
-/** Hoá đơn / chi phí Lisa ghi nhận từ hội thoại, ảnh hoá đơn, hoặc user tự nhập. */
+/** Hoá đơn / chi phí Zino ghi nhận từ hội thoại, ảnh hoá đơn, hoặc user tự nhập. */
 export const expenses = pgTable(
   "expenses",
   {
@@ -220,7 +220,7 @@ export const photos = pgTable(
   (t) => [index("photos_trip_idx").on(t.tripId, t.takenAt)]
 );
 
-/** Nhật ký hoạt động của Lisa — timeline "Lisa đã làm gì" trên mini app. */
+/** Nhật ký hoạt động của Zino — timeline "Zino đã làm gì" trên mini app. */
 export const activities = pgTable(
   "activities",
   {
@@ -307,7 +307,7 @@ export const partnerOas = pgTable(
     tags: text("tags"), // csv: "gần biển,có hồ bơi,cho trẻ em"
 
     /* ---- Uỷ quyền OAuth (Partner Network) -------------------------------
-     * OA đã bấm "Cho phép" cho app của Lisa → ta nhận được webhook tin nhắn
+     * OA đã bấm "Cho phép" cho app của Zino → ta nhận được webhook tin nhắn
      * user gửi tới OA đó, và trả lời thay họ. Xem docs/PARTNER-NETWORK.md.
      */
     connected: boolean("connected").notNull().default(false),
@@ -343,7 +343,7 @@ export const oauthStates = pgTable("oauth_states", {
 });
 
 /**
- * Một "lead": user hỏi OA đối tác, bắt nguồn từ hội thoại với Lisa.
+ * Một "lead": user hỏi OA đối tác, bắt nguồn từ hội thoại với Zino.
  * Dùng để nối tin trả lời của merchant ngược về đúng nhóm chat.
  */
 export const oaLeads = pgTable(
@@ -356,7 +356,7 @@ export const oaLeads = pgTable(
     /** UID của user, scope theo TỪNG OA — khác nhau giữa các OA */
     oaUserId: varchar("oa_user_id", { length: 64 }).notNull(),
     oaUserName: text("oa_user_name"),
-    /** Hội thoại Lisa đã giới thiệu OA này (nếu truy được) */
+    /** Hội thoại Zino đã giới thiệu OA này (nếu truy được) */
     conversationId: bigint("conversation_id", { mode: "number" }),
     tripId: bigint("trip_id", { mode: "number" }),
     lastUserMessage: text("last_user_message"),

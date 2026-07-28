@@ -1,7 +1,7 @@
 name: CD · Infra (VPS)
 
-# Đồng bộ infra/ (compose, Caddyfile, persona Lisa) lên VPS rồi áp dụng.
-# KHÔNG đụng vào /opt/lisa/.env (secret nằm ngoài git) và state runtime
+# Đồng bộ infra/ (compose, Caddyfile, persona Zino) lên VPS rồi áp dụng.
+# KHÔNG đụng vào /opt/zino/.env (secret nằm ngoài git) và state runtime
 # của OpenClaw.
 
 on:
@@ -42,15 +42,15 @@ jobs:
           # 1) compose + Caddyfile + .env.example (không --delete, không đụng .env)
           rsync -avz -e "$RSH" \
             --exclude ".env" --exclude "openclaw" \
-            infra/ "$SSH_USER@$HOST:/opt/lisa/"
-          # 2) config + persona của Lisa (phần còn lại của openclaw/ là
+            infra/ "$SSH_USER@$HOST:/opt/zino/"
+          # 2) config + persona của Zino (phần còn lại của openclaw/ là
           #    runtime state do container ghi — không sync)
           rsync -avz -e "$RSH" \
             infra/openclaw/openclaw.json \
-            "$SSH_USER@$HOST:/opt/lisa/openclaw/openclaw.json"
+            "$SSH_USER@$HOST:/opt/zino/openclaw/openclaw.json"
           rsync -avz -e "$RSH" \
             infra/openclaw/workspace/ \
-            "$SSH_USER@$HOST:/opt/lisa/openclaw/workspace/"
+            "$SSH_USER@$HOST:/opt/zino/openclaw/workspace/"
 
       - name: Áp dụng thay đổi
         env:
@@ -63,15 +63,15 @@ jobs:
           ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new \
               -p "${PORT:-22}" "$SSH_USER@$HOST" bash -s <<'REMOTE'
           set -euo pipefail
-          cd /opt/lisa
+          cd /opt/zino
           if [ ! -f .env ]; then
-            echo "::error::/opt/lisa/.env chưa tồn tại — SSH vào VPS, cp .env.example .env và điền giá trị."
+            echo "::error::/opt/zino/.env chưa tồn tại — SSH vào VPS, cp .env.example .env và điền giá trị."
             exit 1
           fi
           # rsync chạy bằng root làm file đổi chủ — container openclaw chạy uid 1000
-          chown -R 1000:1000 /opt/lisa/openclaw
+          chown -R 1000:1000 /opt/zino/openclaw
           docker compose up -d --remove-orphans
-          # nạp lại persona Lisa
+          # nạp lại persona Zino
           docker compose restart openclaw
           REMOTE
           rm -f /tmp/deploy_key

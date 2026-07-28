@@ -1,6 +1,6 @@
-# Lisa – Trợ lý du lịch (ZA Hackathon 2026)
+# Zino – Trợ lý nhu cầu (ZA Hackathon 2026)
 
-AI agent sống trong nhóm Zalo (OpenClaw + Claude) giúp team lên kế hoạch du lịch, kèm Zalo Mini App để xem lịch trình, chi phí, kỷ niệm.
+Zalo Intelligent Needs — AI agent sống trong nhóm Zalo (OpenClaw + Claude) giúp team lo các nhu cầu chung, hiện tập trung vào du lịch, kèm Zalo Mini App để xem lịch trình, chi phí, kỷ niệm.
 
 ```bash
 corepack enable && pnpm install

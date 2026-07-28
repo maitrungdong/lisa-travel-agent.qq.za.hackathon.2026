@@ -17,7 +17,7 @@ const CATEGORY_LABEL: Record<string, string> = {
  * Chi phí + chia tiền.
  *
  * Kết quả chia tiền lấy TỪ SERVER (`/trips/:id/settle`), dùng chung hàm
- * settleExpenses với tool của agent. Không tính lại ở client — nếu Lisa nói
+ * settleExpenses với tool của agent. Không tính lại ở client — nếu Zino nói
  * trong chat khác với màn hình này thì mất sạch uy tín, mà đó là lỗi rất dễ
  * mắc nếu có hai bản tính toán song song.
  */
@@ -45,7 +45,7 @@ export default function ExpensesPage() {
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
             <Receipt size={32} />
             <p className="text-sm">
-              Chụp hoá đơn gửi vào nhóm Zalo — Lisa đọc và ghi vào đây tự động.
+              Chụp hoá đơn gửi vào nhóm Zalo — Zino đọc và ghi vào đây tự động.
             </p>
           </CardContent>
         </Card>

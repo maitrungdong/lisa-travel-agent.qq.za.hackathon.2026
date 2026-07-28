@@ -22,7 +22,7 @@ export interface StoredMedia {
  *  `message.photo_url` của Zalo là URL tạm — tài liệu không cam kết tuổi thọ.
  *  Nếu đợi tới lúc agent xử lý mới tải thì có thể đã 404. Tải trước, hỏi sau.
  *
- * Ảnh lưu ở /data/media (mount từ /opt/lisa/media), nginx serve lại tại
+ * Ảnh lưu ở /data/media (mount từ /opt/zino/media), nginx serve lại tại
  * {PUBLIC_BASE_URL}/media/... để Zalo fetch được khi sendPhoto.
  */
 @Injectable()
@@ -75,6 +75,16 @@ export class MediaService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * URL công khai → đường dẫn file trên đĩa.
+   * Chỉ nhận tên file thuần (chặn `..` và dấu `/`) để không đọc ra ngoài MEDIA_DIR.
+   */
+  pathFromUrl(url: string): string | null {
+    const name = url.split("/").pop();
+    if (!name || name.includes("..") || name.includes("\\")) return null;
+    return join(MEDIA_DIR, name);
   }
 
   /** Ghi file HTML trang tổng kết chuyến đi, trả URL công khai. */

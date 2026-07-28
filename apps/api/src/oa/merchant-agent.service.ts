@@ -32,7 +32,7 @@ export class MerchantAgentService {
    * Xử lý một tin user vừa gửi tới OA đối tác:
    *   1. soạn trả lời từ inventory của merchant
    *   2. gửi trả lời đó qua OA (tin tư vấn, miễn phí, trong cửa sổ 7 ngày)
-   *   3. đẩy tóm tắt về nhóm Lisa đã giới thiệu OA này
+   *   3. đẩy tóm tắt về nhóm Zino đã giới thiệu OA này
    */
   async handleLead(leadId: number): Promise<void> {
     const lead = await this.db.query.oaLeads.findFirst({ where: eq(oaLeads.id, leadId) });
@@ -70,7 +70,7 @@ export class MerchantAgentService {
       .set({ lastReply: reply, status: "replied", updatedAt: new Date() })
       .where(eq(oaLeads.id, leadId));
 
-    await this.notifyLisaGroup(lead.conversationId, partner.name, reply);
+    await this.notifyZinoGroup(lead.conversationId, partner.name, reply);
   }
 
   /** Sinh câu trả lời. Trả null nếu không nên gửi gì. */
@@ -101,7 +101,7 @@ ${
 
     try {
       const res = await this.anthropic.messages.create({
-        model: process.env.LISA_MERCHANT_MODEL ?? "claude-haiku-4-5-20251001",
+        model: process.env.ZINO_MERCHANT_MODEL ?? "claude-haiku-4-5-20251001",
         max_tokens: 600,
         system,
         messages: [{ role: "user", content: userMessage }]
@@ -118,8 +118,8 @@ ${
     }
   }
 
-  /** Đẩy kết quả ngược về nhóm Lisa — đây là chỗ vòng lặp khép lại. */
-  private async notifyLisaGroup(
+  /** Đẩy kết quả ngược về nhóm Zino — đây là chỗ vòng lặp khép lại. */
+  private async notifyZinoGroup(
     conversationId: number | null,
     oaName: string,
     reply: string

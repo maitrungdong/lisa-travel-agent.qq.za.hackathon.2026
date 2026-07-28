@@ -4,8 +4,8 @@ import { api, resolveActiveTrip, type Note, type Photo } from "../lib/api";
 import { Card, CardContent } from "../components/ui/card";
 
 /**
- * Kỷ niệm — ảnh và nhật ký Lisa gom được trong chuyến đi.
- * Ảnh do Lisa tải về từ Zalo rồi nginx serve lại tại {PUBLIC_BASE_URL}/media/...
+ * Kỷ niệm — ảnh và nhật ký Zino gom được trong chuyến đi.
+ * Ảnh do Zino tải về từ Zalo rồi nginx serve lại tại {PUBLIC_BASE_URL}/media/...
  * (photo_url gốc của Zalo là URL tạm, không dùng lại được).
  */
 export default function GalleryPage() {
@@ -38,7 +38,7 @@ export default function GalleryPage() {
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
             <Images size={32} />
             <p className="text-sm">
-              Gửi ảnh vào nhóm Zalo, Lisa sẽ tự gom về đây kèm chú thích.
+              Gửi ảnh vào nhóm Zalo, Zino sẽ tự gom về đây kèm chú thích.
             </p>
           </CardContent>
         </Card>
@@ -80,7 +80,7 @@ export default function GalleryPage() {
               <CardContent className="space-y-1 py-3">
                 <p className="text-sm leading-relaxed">{n.content}</p>
                 <p className="text-xs text-muted-foreground">
-                  {n.authorName ?? "Lisa"} · {new Date(n.takenAt).toLocaleDateString("vi-VN")}
+                  {n.authorName ?? "Zino"} · {new Date(n.takenAt).toLocaleDateString("vi-VN")}
                 </p>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-# Lisa — Kiến trúc hệ thống AI Agent du lịch trên Zalo
+# Zino — Kiến trúc hệ thống AI Agent du lịch trên Zalo
 
 > Bản chốt cho ZA Hackathon 2026. Mọi ràng buộc dưới đây đã được verify từ tài liệu chính thức
 > (Zalo Bot API, Zalo Mini App SDK, Zalo OA Open API, Claude Managed Agents / Messages API).
@@ -79,7 +79,7 @@ sequenceDiagram
     C-->>W: text trả lời
     W->>W: [5] renderPlainText → chunk 2000
     W->>Z: sendMessage × N
-    Z->>U: Lisa trả lời
+    Z->>U: Zino trả lời
     W->>DB: [6] log message + enqueue reflection
 
     Note over W,MA: Việc nặng → async
@@ -119,7 +119,7 @@ Phác thảo gốc: *pre-processing → grounding → workflow calling agent →
                 └─ Tool có side-effect lớn (chốt chuyến, chốt chia tiền) → cần confirm 2 bước.
 
 [7] RENDER      markdown → plain text → chunk 2000 → sendMessage/sendPhoto
-                └─ Lisa luôn nói rõ vừa làm gì ("đã lưu 3 mốc lịch trình").
+                └─ Zino luôn nói rõ vừa làm gì ("đã lưu 3 mốc lịch trình").
 
 [8] PERSIST     log message · ghi activity feed · enqueue reflection (trích memory dài hạn)
 ```
@@ -140,7 +140,7 @@ Không làm multi-agent thật cho hot path (đắt, chậm, khó debug). Chuyê
 
 ```
                           ┌──────────────────────────┐
-                          │  LISA (orchestrator)     │
+                          │  ZINO (orchestrator)     │
                           │  Sonnet 5 · Messages API │
                           │  hội thoại · <3s         │
                           └────────────┬─────────────┘
@@ -166,10 +166,10 @@ Không làm multi-agent thật cho hot path (đắt, chậm, khó debug). Chuyê
 ```
 
 **Vì sao tách async:** hai việc này mất 30–120s. Nhét vào hot path = user chờ trong im lặng.
-Tách ra thì Lisa nói *"để mình research chút nha, 1 phút nữa mình gửi"* rồi **push chủ động** —
+Tách ra thì Zino nói *"để mình research chút nha, 1 phút nữa mình gửi"* rồi **push chủ động** —
 vừa đúng UX, vừa demo được năng lực "agent tự chạy nền" (Bot API không có cửa sổ 48h nên push được).
 
-**Escalation:** câu hỏi lập kế hoạch phức tạp → Lisa gọi tool `request_deep_plan()` → tạo Managed Agents
+**Escalation:** câu hỏi lập kế hoạch phức tạp → Zino gọi tool `request_deep_plan()` → tạo Managed Agents
 session (Opus 5) → webhook `session.status_idled` → worker lấy kết quả → push. Đây là pattern
 *Escalation* mà Anthropic khuyến nghị.
 
@@ -193,7 +193,7 @@ Sau mỗi phiên (im lặng >10 phút) HOẶC kết thúc chuyến đi
   → merge vào group_memory, giữ version cũ để audit
 ```
 
-Lần sau nhóm quay lại: `[2] RESOLVE` thấy `seen_count > 0` → Lisa mở lời bằng
+Lần sau nhóm quay lại: `[2] RESOLVE` thấy `seen_count > 0` → Zino mở lời bằng
 *"Lại là nhóm Đà Nẵng năm ngoái à! Lần này vẫn ưu tiên gần biển và né hải sản cho Đông nhỉ?"*
 → **khoảnh khắc ăn điểm rõ nhất trong demo.**
 
@@ -258,7 +258,7 @@ LLM tính số hay sai. Làm bằng code, LLM chỉ diễn giải kết quả:
 5. Trả về [{from, to, amount}] + bảng chi tiết
 ```
 
-Tool `settle_expenses()` trả về JSON này; Lisa chỉ việc render thành text đẹp. **Kiểm chứng bằng unit test** — có test là điểm cộng thật khi giám khảo hỏi "sao tin được con số".
+Tool `settle_expenses()` trả về JSON này; Zino chỉ việc render thành text đẹp. **Kiểm chứng bằng unit test** — có test là điểm cộng thật khi giám khảo hỏi "sao tin được con số".
 
 ---
 
@@ -266,13 +266,13 @@ Tool `settle_expenses()` trả về JSON này; Lisa chỉ việc render thành t
 
 ```
 message.image.received
-  → tải photo_url về /opt/lisa/media/<uuid>.jpg  (làm NGAY, URL có thể hết hạn)
+  → tải photo_url về /opt/zino/media/<uuid>.jpg  (làm NGAY, URL có thể hết hạn)
   → phục vụ lại qua https://<team>.123c.vn/media/<uuid>.jpg  (để sendPhoto dùng được)
   → đính vào user turn dạng image content block (base64)
   → Claude vision đọc trực tiếp
 ```
 
-Prompt cho Lisa nhận diện 3 loại ảnh và tự chọn hành động:
+Prompt cho Zino nhận diện 3 loại ảnh và tự chọn hành động:
 
 | Loại ảnh | Hành động |
 |---|---|
@@ -295,7 +295,7 @@ tới OA khác. Mọi thư viện làm được điều đó (`zca-js`, `zlapi`,
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant L as Lisa (Bot)
+    participant L as Zino (Bot)
     participant M as Mini App
     participant OA as OA Khách sạn
 
@@ -303,11 +303,11 @@ sequenceDiagram
     L->>L: search_partner_oa(city=ĐN, cat=HOTEL) + web_search giá thị trường
     L->>U: 3 lựa chọn (tên · giá · khoảng cách biển) + link Mini App
     U->>M: mở Mini App, chọn "Sunrise Resort"
-    M->>M: draft_oa_inquiry() → Lisa soạn câu hỏi đầy đủ
+    M->>M: draft_oa_inquiry() → Zino soạn câu hỏi đầy đủ
     M->>OA: openChat({type:"oa", id, message: "<đã điền sẵn>"})
     Note over U,OA: User đọc lại → bấm Gửi (quyền quyết định thuộc user)
     OA->>U: khách sạn trả lời giá
-    U->>L: chụp màn hình báo giá gửi Lisa
+    U->>L: chụp màn hình báo giá gửi Zino
     L->>L: vision đọc giá → add_expense/add_event
 ```
 
@@ -320,11 +320,11 @@ sequenceDiagram
 }
 ```
 
-**Fallback khi không có Mini App:** Lisa gửi thẳng đoạn tin đã soạn vào chat + link `zalo.me/<oaId>`
+**Fallback khi không có Mini App:** Zino gửi thẳng đoạn tin đã soạn vào chat + link `zalo.me/<oaId>`
 → user copy-paste. Mất sự mượt, giữ được giá trị.
 
 **Câu chốt khi pitch:** *"Zalo không có API để bot nhắn cho OA khác — và điều đó đúng, vì
-nó bảo vệ user. Lisa không lách. Lisa soạn hộ bạn câu hỏi hoàn chỉnh, quyền bấm Gửi vẫn là của bạn.
+nó bảo vệ user. Zino không lách. Zino soạn hộ bạn câu hỏi hoàn chỉnh, quyền bấm Gửi vẫn là của bạn.
 Đây là human-in-the-loop đúng nghĩa."* — vừa trả lời được câu hỏi khó của giám khảo, vừa ghi điểm trust.
 
 ---
@@ -342,8 +342,8 @@ VPS: Rocky Linux 9.4 · 4 vCPU · 5.6GB RAM · 35GB trống · IP `118.102.2.135
 Internet :443 ──► nginx (BTC, cert *.123c.vn)
                     ├─ location /zalo/     ──► 127.0.0.1:3000   webhook
                     ├─ location /api/      ──► 127.0.0.1:3000   BFF cho Mini App
-                    ├─ location /media/    ──► alias /opt/lisa/media   ảnh cho sendPhoto
-                    └─ location /trip/     ──► alias /opt/lisa/recap   trang tổng kết
+                    ├─ location /media/    ──► alias /opt/zino/media   ảnh cho sendPhoto
+                    └─ location /trip/     ──► alias /opt/zino/recap   trang tổng kết
                                                  ▲
 docker compose ──► postgres:16  (127.0.0.1:5432)  │
               └─► api (NestJS + worker)  :3000 ───┘
@@ -366,11 +366,11 @@ trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
 
 | Phút | Cảnh | Năng lực chứng minh |
 |---|---|---|
-| 0:00 | Add Lisa vào nhóm → *"Ơ nhóm Vũng Tàu năm ngoái! Vẫn né hải sản cho Đông chứ?"* | **Memory xuyên chuyến đi (L3)** |
-| 0:30 | *"Đi Vũng Tàu 12–14/8, 6 người, 3tr/người"* → Lisa hỏi lại 2 câu → chốt → tạo chuyến | Grounding · confirm-before-commit |
+| 0:00 | Add Zino vào nhóm → *"Ơ nhóm Vũng Tàu năm ngoái! Vẫn né hải sản cho Đông chứ?"* | **Memory xuyên chuyến đi (L3)** |
+| 0:30 | *"Đi Vũng Tàu 12–14/8, 6 người, 3tr/người"* → Zino hỏi lại 2 câu → chốt → tạo chuyến | Grounding · confirm-before-commit |
 | 1:00 | *"Lên lịch trình giúp"* → *"Để mình research nha"* → **60s sau tự nhắn** lịch trình 3 ngày có giá thật | **Async agent + web_search + push chủ động** |
 | 2:00 | *"Tìm chỗ ở gần biển"* → ra **Khách sạn Malibu** → mở Mini App → **openChat điền sẵn câu hỏi** → bấm Gửi | ⭐ **OA ecosystem interop** |
-| 2:45 | Chụp hoá đơn quán ăn gửi vào nhóm → Lisa đọc, ghi chi phí, chia đầu người | **Vision OCR + tool ghi state** |
+| 2:45 | Chụp hoá đơn quán ăn gửi vào nhóm → Zino đọc, ghi chi phí, chia đầu người | **Vision OCR + tool ghi state** |
 | 3:15 | Ảnh kỷ niệm → vào gallery Mini App | Đa phương thức |
 | 3:45 | *"Chia tiền"* → bảng ai nợ ai, **số giao dịch tối thiểu** | Thuật toán đúng, có unit test |
 | 4:15 | *"Tổng kết chuyến đi"* → agent dựng **trang web tổng kết** → gửi link | Agent chạy nền, có sandbox |
@@ -379,8 +379,8 @@ trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
 **Câu chốt cho phút 2:00** — chuẩn bị sẵn, vì giám khảo Zalo chắc chắn hỏi:
 
 > *"Zalo không có API cho bot nhắn thay user — và điều đó đúng, nó bảo vệ người
-> dùng. Lisa không lách. Lisa soạn hộ câu hỏi đầy đủ, quyền bấm Gửi vẫn là của
-> bạn. Bước tiếp theo là Partner Network: khi khách sạn uỷ quyền OA cho Lisa,
+> dùng. Zino không lách. Zino soạn hộ câu hỏi đầy đủ, quyền bấm Gửi vẫn là của
+> bạn. Bước tiếp theo là Partner Network: khi khách sạn uỷ quyền OA cho Zino,
 > câu trả lời của họ tự động quay về nhóm chat — chúng em đã implement, đang chờ
 > đối tác uỷ quyền."*
 
@@ -418,7 +418,7 @@ trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
 **Kết luận thẳng:**
 
 - **Hạng mục 1–10 + 13: chắc chắn xong hôm nay.** Đây đã là một sản phẩm hoàn chỉnh cả 3 pha.
-- **Hạng mục 12 (Mini App): phụ thuộc C.** Nếu app Zalo Mini App đã sẵn sàng → xong. Nếu chưa → tôi làm fallback bằng Bot (Lisa gửi text đã soạn + deeplink `zalo.me`) và một trang web thường cho recap. Mất độ mượt, **không mất luồng**.
+- **Hạng mục 12 (Mini App): phụ thuộc C.** Nếu app Zalo Mini App đã sẵn sàng → xong. Nếu chưa → tôi làm fallback bằng Bot (Zino gửi text đã soạn + deeplink `zalo.me`) và một trang web thường cho recap. Mất độ mượt, **không mất luồng**.
 - **Hạng mục 11 (Managed Agents): phụ thuộc D.** Không có beta → dùng Messages API + background job, kết quả với người xem là như nhau.
 
 **Việc duy nhất tôi khuyên cắt nếu kẹt giờ:** trang recap dựng-bằng-sandbox (11) → thay bằng template HTML tĩnh render từ DB. Tiết kiệm 1h30, khán giả gần như không phân biệt được.

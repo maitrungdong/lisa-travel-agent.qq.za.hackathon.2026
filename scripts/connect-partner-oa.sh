@@ -2,8 +2,8 @@
 # =============================================================================
 #  connect-partner-oa.sh — nạp thủ công một OA vào mạng lưới Partner Network.
 #
-#  CHẠY TRÊN VPS, trong /opt/lisa:
-#      bash ~/lisa/scripts/connect-partner-oa.sh '<ACCESS_TOKEN>'
+#  CHẠY TRÊN VPS, trong /opt/zino:
+#      bash ~/zino/scripts/connect-partner-oa.sh '<ACCESS_TOKEN>'
 #
 #  VÌ SAO CẦN SCRIPT NÀY:
 #  Luồng chuẩn là OAuth v4 (/oa/connect). Nhưng Zalo từ chối OAuth khi ứng dụng
@@ -20,7 +20,7 @@ set -euo pipefail
 TOKEN="${1:-}"
 [ -n "$TOKEN" ] || { echo "Dùng: bash $0 '<ACCESS_TOKEN>'"; exit 1; }
 
-COMPOSE_DIR="${COMPOSE_DIR:-/opt/lisa}"
+COMPOSE_DIR="${COMPOSE_DIR:-/opt/zino}"
 CITY="${OA_CITY:-Vũng Tàu}"
 CATEGORY="${OA_CATEGORY:-HOTEL}"
 
@@ -58,13 +58,13 @@ cd "$COMPOSE_DIR" || die "Không vào được $COMPOSE_DIR"
 docker compose exec -T \
   -e V_OA_ID="$OA_ID" -e V_NAME="$OA_NAME" -e V_AVATAR="$OA_AVATAR" \
   -e V_TOKEN="$TOKEN" -e V_CITY="$CITY" -e V_CAT="$CATEGORY" \
-  postgres psql -U lisa -d lisa -v ON_ERROR_STOP=1 <<'SQL' || die "Ghi DB thất bại"
+  postgres psql -U zino -d zino -v ON_ERROR_STOP=1 <<'SQL' || die "Ghi DB thất bại"
 INSERT INTO partner_oas (
   oa_id, name, category, city, description, avatar_url, deeplink,
   connected, access_token, token_expires_at, connected_at, auto_reply, inventory_note
 ) VALUES (
   :'V_OA_ID', :'V_NAME', :'V_CAT', :'V_CITY',
-  'Đối tác trong mạng lưới Lisa', NULLIF(:'V_AVATAR',''),
+  'Đối tác trong mạng lưới Zino', NULLIF(:'V_AVATAR',''),
   'https://zalo.me/' || :'V_OA_ID',
   true, :'V_TOKEN', now() + interval '24 hours', now(), true,
   $inv$Phòng và giá (đã gồm ăn sáng, chưa VAT):
@@ -107,7 +107,7 @@ cat <<EOF
        cd $COMPOSE_DIR && docker compose logs -f api | grep -iE "oa|lead|merchant"
 
   3. Xem lead đã vào chưa:
-       docker compose exec postgres psql -U lisa -d lisa -c \\
+       docker compose exec postgres psql -U zino -d zino -c \\
          "SELECT id,status,left(last_user_message,40),left(last_reply,60) FROM oa_leads ORDER BY id DESC LIMIT 3;"
 
   Nếu log im lặng hoàn toàn → webhook không bắn (app chưa duyệt).

@@ -88,7 +88,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
           await this.handleReflection(job);
           break;
         case "merchant_reply":
-          // Partner Network: trả lời lead thay OA đối tác rồi đẩy về nhóm Lisa
+          // Partner Network: trả lời lead thay OA đối tác rồi đẩy về nhóm Zino
           await this.merchant.handleLead(job.payload.leadId as number);
           break;
         default:
@@ -128,9 +128,13 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       imageMime: (p.imageMime as unknown as string) ?? null
     });
 
-    if (result.reply) {
-      await this.zalo.sendMarkdown(chatId, result.reply);
-      await this.conversations.recordOutbound(p.conversationId as unknown as number, result.reply);
+    // Agent có thể trả về nhiều tin khi nó chủ động tách theo từng người/chủ đề.
+    // Gửi tuần tự, giãn nhẹ để Zalo giữ đúng thứ tự.
+    for (const [i, reply] of result.replies.entries()) {
+      const text = reply.to ? `@${reply.to} ${reply.text}` : reply.text;
+      await this.zalo.sendMarkdown(chatId, text);
+      await this.conversations.recordOutbound(p.conversationId as unknown as number, text);
+      if (i < result.replies.length - 1) await sleep(600);
     }
 
     // Lên lịch reflection — nếu nhóm còn nhắn tiếp, job sau sẽ ghi đè kết quả
@@ -159,7 +163,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     );
 
     const res = await this.anthropic.messages.create({
-      model: process.env.LISA_PLANNER_MODEL ?? "claude-opus-5",
+      model: process.env.ZINO_PLANNER_MODEL ?? "claude-opus-5",
       max_tokens: 4000,
       system:
         "Bạn là chuyên gia lập lịch trình du lịch Việt Nam. Dùng web_search để tra CỨU THẬT: " +
@@ -191,7 +195,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     await this.db.insert(activities).values({
       tripId,
       kind: "plan",
-      content: "Lisa đã research và đề xuất lịch trình chi tiết"
+      content: "Zino đã research và đề xuất lịch trình chi tiết"
     });
 
     await this.zalo.sendMarkdown(zaloChatId, `📋 Lịch trình mình vừa research xong đây!\n\n${plan}`);
@@ -212,7 +216,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!state) return;
 
     const res = await this.anthropic.messages.create({
-      model: process.env.LISA_RECAP_MODEL ?? "claude-sonnet-5",
+      model: process.env.ZINO_RECAP_MODEL ?? "claude-sonnet-5",
       max_tokens: 8000,
       system:
         "Bạn dựng trang web tổng kết chuyến đi. Trả về DUY NHẤT một file HTML hoàn chỉnh, " +
@@ -271,11 +275,11 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     });
 
     const transcript = rows
-      .map((r) => `${r.role === "assistant" ? "Lisa" : (r.senderName ?? "User")}: ${r.text ?? "[ảnh]"}`)
+      .map((r) => `${r.role === "assistant" ? "Zino" : (r.senderName ?? "User")}: ${r.text ?? "[ảnh]"}`)
       .join("\n");
 
     const res = await this.anthropic.messages.create({
-      model: process.env.LISA_REFLECTION_MODEL ?? "claude-haiku-4-5-20251001",
+      model: process.env.ZINO_REFLECTION_MODEL ?? "claude-haiku-4-5-20251001",
       max_tokens: 1200,
       system: REFLECTION_PROMPT,
       messages: [

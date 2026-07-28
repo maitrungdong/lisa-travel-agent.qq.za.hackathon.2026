@@ -3,13 +3,13 @@
 Yêu cầu: Node ≥ 20, Docker (cho Postgres).
 
 ```bash
-# (từ root của repo lisa-travel-agent)
+# (từ root của repo zino-travel-agent)
 corepack enable
 pnpm install
 
 # DB local
-docker run -d --name lisa-pg -e POSTGRES_USER=lisa -e POSTGRES_PASSWORD=lisa \
-  -e POSTGRES_DB=lisa -p 5432:5432 postgres:16-alpine
+docker run -d --name zino-pg -e POSTGRES_USER=zino -e POSTGRES_PASSWORD=zino \
+  -e POSTGRES_DB=zino -p 5432:5432 postgres:16-alpine
 pnpm db:push                      # tạo schema từ apps/api/src/db/schema.ts
 
 # API
@@ -35,7 +35,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 | `pnpm test -- --coverage` | Test + coverage (CI upload thư mục `coverage/`) |
 | `pnpm --filter api build` / `--filter miniapp build` | Build riêng từng app |
 
-## Giả lập Lisa ghi dữ liệu (không cần bot)
+## Giả lập Zino ghi dữ liệu (không cần bot)
 
 ```bash
 curl -X POST localhost:3000/trips -H 'Content-Type: application/json' \

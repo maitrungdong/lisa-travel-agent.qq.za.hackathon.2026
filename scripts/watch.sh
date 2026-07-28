@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  watch.sh — theo dõi Lisa đang làm gì, theo thời gian thực.
+#  watch.sh — theo dõi Zino đang làm gì, theo thời gian thực.
 #
 #  CHẠY TRÊN VPS:
-#      bash ~/lisa/scripts/watch.sh            # dòng thời gian của agent
-#      bash ~/lisa/scripts/watch.sh --all      # toàn bộ log, không lọc
-#      bash ~/lisa/scripts/watch.sh --db       # trạng thái DB, làm mới mỗi 3s
+#      bash ~/zino/scripts/watch.sh            # dòng thời gian của agent
+#      bash ~/zino/scripts/watch.sh --all      # toàn bộ log, không lọc
+#      bash ~/zino/scripts/watch.sh --db       # trạng thái DB, làm mới mỗi 3s
 #
 #  Cách đọc dòng thời gian:
 #      [a1b2c3] ▶ Đông: nhóm mình đi Vũng Tàu…   ← tin vào (6 số cuối chat id)
@@ -14,7 +14,7 @@
 # =============================================================================
 set -uo pipefail
 
-COMPOSE_DIR="${COMPOSE_DIR:-/opt/lisa}"
+COMPOSE_DIR="${COMPOSE_DIR:-/opt/zino}"
 cd "$COMPOSE_DIR" || { echo "Không vào được $COMPOSE_DIR"; exit 1; }
 
 case "${1:-}" in
@@ -26,8 +26,8 @@ case "${1:-}" in
     # Ảnh chụp trạng thái, làm mới liên tục — hữu ích khi diễn thử
     while true; do
       clear
-      printf '\033[1;36m═══ LISA · %s ═══\033[0m\n\n' "$(date '+%H:%M:%S')"
-      docker compose exec -T postgres psql -U lisa -d lisa -q <<'SQL'
+      printf '\033[1;36m═══ ZINO · %s ═══\033[0m\n\n' "$(date '+%H:%M:%S')"
+      docker compose exec -T postgres psql -U zino -d zino -q <<'SQL'
 \pset border 2
 SELECT c.zalo_chat_id AS chat, c.chat_type AS loai, c.seen_count AS lan_gap,
        t.name AS chuyen_di, t.status AS trang_thai
@@ -58,7 +58,7 @@ SQL
 
   *)
     # Mặc định: chỉ giữ dòng có ý nghĩa với người xem
-    printf '\033[1;36m═══ Theo dõi Lisa · Ctrl+C để thoát ═══\033[0m\n\n'
+    printf '\033[1;36m═══ Theo dõi Zino · Ctrl+C để thoát ═══\033[0m\n\n'
     docker compose logs -f --tail 40 api 2>&1 | grep --line-buffered -E \
       '▶|◀|🔧|⏰|📩|ERROR|WARN|Schema đã đồng bộ|Worker đã chạy|listening|job#'
     ;;

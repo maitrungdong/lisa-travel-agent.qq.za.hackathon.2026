@@ -22,7 +22,7 @@ export const partnerTools: ToolDef[] = [
   {
     name: "search_partner_oa",
     description:
-      "Tìm Official Account đối tác du lịch (khách sạn, tour, nhà hàng, xe) trong mạng lưới của Lisa. " +
+      "Tìm Official Account đối tác du lịch (khách sạn, tour, nhà hàng, xe) trong mạng lưới của Zino. " +
       "Dùng khi user cần tìm chỗ ở, chỗ ăn, tour, phương tiện. " +
       "Kết quả là các OA thật trên Zalo mà user có thể nhắn tin trực tiếp.",
     input_schema: schema(
@@ -92,7 +92,7 @@ export const partnerTools: ToolDef[] = [
     name: "draft_oa_inquiry",
     description:
       "Soạn sẵn tin nhắn hỏi một OA đối tác (hỏi giá, đặt phòng, đặt bàn) và tạo link mở chat. " +
-      "Lisa soạn hộ — user chỉ việc đọc lại và bấm Gửi. " +
+      "Zino soạn hộ — user chỉ việc đọc lại và bấm Gửi. " +
       "Gọi sau khi user đã chọn một OA từ kết quả search_partner_oa. " +
       "Viết tin nhắn ĐẦY ĐỦ: ngày, số người, nhu cầu cụ thể, ngân sách, và các câu hỏi rõ ràng.",
     input_schema: schema(
