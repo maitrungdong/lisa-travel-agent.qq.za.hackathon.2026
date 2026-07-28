@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DB, type Database } from "../db/database.module";
 import { oaLeads, partnerOas } from "../db/schema";
+import { envStr } from "../pipeline/pipeline.types";
 import { ZaloClient } from "../zalo/zalo.client";
 import { OaClient } from "./oa.client";
 import { OaOAuthService } from "./oauth.service";
@@ -19,7 +20,16 @@ import { OaOAuthService } from "./oauth.service";
 @Injectable()
 export class MerchantAgentService {
   private readonly log = new Logger(MerchantAgentService.name);
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
+  /**
+   * Soạn một tin trả lời ngắn cho lead — việc nhẹ nhất trong hệ (haiku, không
+   * tool). 60s là quá rộng; nó ở đây chỉ để một request treo không giữ khoá job
+   * suốt 15 phút (`STALE_LOCK_MS`) và làm nghẽn cả hàng đợi của nhóm đó.
+   */
+  private readonly anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    timeout: 60_000,
+    maxRetries: 1
+  });
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -101,7 +111,7 @@ ${
 
     try {
       const res = await this.anthropic.messages.create({
-        model: process.env.ZINO_MERCHANT_MODEL ?? "claude-haiku-4-5-20251001",
+        model: envStr("ZINO_MERCHANT_MODEL", "claude-haiku-4-5-20251001"),
         max_tokens: 600,
         system,
         messages: [{ role: "user", content: userMessage }]

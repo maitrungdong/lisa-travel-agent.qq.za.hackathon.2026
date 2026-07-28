@@ -54,13 +54,21 @@ export const planningTools: ToolDef[] = [
           })
           .returning({ id: pipelineRuns.id });
 
-        await ctx.enqueue("pipeline_step", {
-          runId: row.id,
-          stage: "A",
-          userMessage: String(input.user_message ?? ""),
-          actorId: ctx.senderZaloId,
-          actorName: ctx.senderName
-        });
+        // dedupeKey bắt buộc — xem ghi chú cùng vấn đề ở v7.tools.ts.
+        // Webhook đẩy pipeline_step kèm dedupeKey = chatId; job mở flow này
+        // phải dùng cùng khoá, nếu không hai stage chạy song song được.
+        await ctx.enqueue(
+          "pipeline_step",
+          {
+            runId: row.id,
+            stage: "A",
+            userMessage: String(input.user_message ?? ""),
+            actorId: ctx.senderZaloId,
+            actorName: ctx.senderName
+          },
+          undefined,
+          ctx.zaloChatId
+        );
 
         return {
           ok: true,

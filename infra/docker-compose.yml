@@ -90,9 +90,35 @@ services:
       ZINO_AGENT_INTAKE_ID: ${ZINO_AGENT_INTAKE_ID:-}
       ZINO_AGENT_BRAIN_ID: ${ZINO_AGENT_BRAIN_ID:-}
       ZINO_AGENT_FINALIZER_ID: ${ZINO_AGENT_FINALIZER_ID:-}
+      # Để trống là dùng mặc định trong code (45s / 300s / 90s). An toàn vì
+      # envInt() chịu được chuỗi rỗng — xem pipeline.types.ts.
       ZINO_INTAKE_TIMEOUT_MS: ${ZINO_INTAKE_TIMEOUT_MS:-}
       ZINO_BRAIN_TIMEOUT_MS: ${ZINO_BRAIN_TIMEOUT_MS:-}
       ZINO_FINALIZER_TIMEOUT_MS: ${ZINO_FINALIZER_TIMEOUT_MS:-}
+
+      # ── Van xả khi flow v7 kẹt ──
+      # Mặc định 24h. Ngày demo nên hạ xuống 3600000 (1h): một flow hỏng mà
+      # không ai gõ "thoát" sẽ tự khỏi sau một giờ thay vì một ngày.
+      ZINO_PIPELINE_TTL_MS: ${ZINO_PIPELINE_TTL_MS:-}
+
+      # ── Chỉnh nóng không cần build lại image ──
+      # Header beta của Managed Agents còn đang thay đổi; để ở đây thì Anthropic
+      # đổi phiên bản là sửa .env + restart, không phải dựng lại image.
+      ZINO_MANAGED_AGENTS_BETA: ${ZINO_MANAGED_AGENTS_BETA:-}
+      ANTHROPIC_API_BASE: ${ANTHROPIC_API_BASE:-}
+      # Model của từng đường. Đổi được lúc chạy là công cụ hạ chi phí/độ trễ
+      # nhanh nhất khi demo bị chậm.
+      ZINO_MODEL: ${ZINO_MODEL:-}
+      ZINO_PLANNER_MODEL: ${ZINO_PLANNER_MODEL:-}
+      ZINO_RECAP_MODEL: ${ZINO_RECAP_MODEL:-}
+      ZINO_REFLECTION_MODEL: ${ZINO_REFLECTION_MODEL:-}
+      ZINO_MERCHANT_MODEL: ${ZINO_MERCHANT_MODEL:-}
+      ZINO_CHAT_MODEL: ${ZINO_CHAT_MODEL:-}
+      # Link Mini App gửi kèm khi nhóm chốt một quyết định
+      ZINO_MINIAPP_URL: ${ZINO_MINIAPP_URL:-}
+      # Cửa sổ gộp tin (1200ms) và trần thời gian một lượt (75s)
+      ZINO_BATCH_WINDOW_MS: ${ZINO_BATCH_WINDOW_MS:-}
+      ZINO_TURN_TIMEOUT_MS: ${ZINO_TURN_TIMEOUT_MS:-}
 
       # ── Pipeline 4 agent (v2) — giữ lại, mặc định tắt ──
       ZINO_PIPELINE_ENABLED: ${ZINO_PIPELINE_ENABLED:-0}

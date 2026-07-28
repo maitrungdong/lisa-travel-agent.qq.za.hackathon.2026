@@ -16,8 +16,20 @@ export interface ToolContext {
   publicBaseUrl: string;
   /** Tool có thể đổi trip đang active (vd create_trip) — worker đọc lại sau turn */
   setActiveTrip: (tripId: number) => void;
-  /** Đưa job vào hàng đợi (deep_plan, recap...) */
-  enqueue: (kind: string, payload: Record<string, unknown>, runAt?: Date) => Promise<void>;
+  /**
+   * Đưa job vào hàng đợi (deep_plan, recap, v7_turn...).
+   *
+   * `dedupeKey` KHÔNG phải tuỳ chọn trang trí. `JobsService.claim()` bỏ qua
+   * chốt serialize với mọi job có `dedupe_key IS NULL`, nên job nào cần chạy
+   * TUẦN TỰ theo hội thoại thì bắt buộc truyền `ctx.zaloChatId`. Bỏ trống là
+   * đúng cho việc độc lập (recap, deep_plan) — chúng chạy song song vô hại.
+   */
+  enqueue: (
+    kind: string,
+    payload: Record<string, unknown>,
+    runAt?: Date,
+    dedupeKey?: string
+  ) => Promise<void>;
   /**
    * Xếp một tin trả lời vào hàng chờ gửi.
    *

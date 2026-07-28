@@ -236,9 +236,42 @@ export function validateFinalizer(o: Record<string, unknown>): FinalizerResult {
 }
 
 /**
+ * Chuỗi thoát flow. Khớp trong `zalo.controller.ts` bằng regex.
+ *
+ * Để ở đây vì mọi tin lỗi đều phải nhắc tới nó — nếu đổi chữ thì phải đổi cả
+ * hai nơi, và hằng số chung là cách rẻ nhất để không quên.
+ */
+export const ESCAPE_WORD = "thoát";
+
+/**
  * §10.4 — tin nhắn dự phòng khi output agent hỏng.
  *
  * Cố ý ngắn và không bịa câu trả lời thay thế. Không lộ chi tiết prompt/tool.
+ *
+ * PHẢI NHẮC LỐI THOÁT. Khi flow v7 đang mở thì MỌI tin nhắn của nhóm đi thẳng
+ * vào Intake (`zalo.controller.ts` `routeToPipeline`), nghĩa là 20 tool còn lại
+ * — ghi chi phí, nhắc hẹn, đọc bill, Partner Network — tạm thời không với tới
+ * được. Nếu Intake hỏng lặp lại mà user không biết gõ "thoát", cả nhóm mắc kẹt
+ * cho tới khi TTL 24h quét. Một dòng chữ ở đây rẻ hơn nhiều so với hậu quả đó.
  */
 export const SAFE_FALLBACK_MESSAGE =
-  "Mình chưa xử lý trọn vẹn yêu cầu này. Bạn gửi lại tin nhắn cuối giúp mình nhé.";
+  "Mình chưa xử lý trọn vẹn yêu cầu này. Bạn gửi lại tin nhắn cuối giúp mình nhé.\n" +
+  `Nếu vẫn không được, nhắn "${ESCAPE_WORD}" để mình quay lại bình thường.`;
+
+/** Tin khi agent chạy quá lâu. Cũng phải có lối thoát, vì cùng lý do trên. */
+export const TIMEOUT_MESSAGE =
+  "Mình tìm lâu quá mà chưa xong 😅 Bạn thử nhờ lại, hoặc thu hẹp yêu cầu giúp mình nhé.\n" +
+  `Muốn dừng hẳn thì nhắn "${ESCAPE_WORD}".`;
+
+/**
+ * Số lượt hỏng LIÊN TIẾP trước khi backend tự đóng flow.
+ *
+ * Vì sao cần: `handleFailure` cố ý giữ flow sống sau lỗi validate và lỗi
+ * timeout — đúng cho sự cố thoáng qua, nhưng với lỗi lặp lại (prompt hỏng, agent
+ * bị xoá trên Console, key hết hạn) thì nó biến thành một cái bẫy: mỗi lượt user
+ * nhắn lại đều rơi vào đúng lỗi cũ. Đếm hai lần rồi tự mở cửa.
+ *
+ * Chọn 2 chứ không phải 1: một lần hỏng rất hay là do agent trả JSON bị cắt, và
+ * lượt sau thường tự khỏi.
+ */
+export const MAX_CONSECUTIVE_FAILURES = 2;

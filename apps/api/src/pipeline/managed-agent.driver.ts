@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  envStr,
   parseStageOutput,
   repairPrompt,
   StageOutputError,
@@ -25,8 +26,8 @@ import {
  * Cả ba đều lộ ra ngay lần chạy đầu tiên; log ở dưới in đủ để chẩn đoán.
  */
 
-const API_BASE = process.env.ANTHROPIC_API_BASE ?? "https://api.anthropic.com";
-const BETA_HEADER = process.env.ZINO_MANAGED_AGENTS_BETA ?? "managed-agents-2026-04-01";
+const API_BASE = envStr("ANTHROPIC_API_BASE", "https://api.anthropic.com");
+const BETA_HEADER = envStr("ZINO_MANAGED_AGENTS_BETA", "managed-agents-2026-04-01");
 
 /**
  * Stage chạy quá lâu.

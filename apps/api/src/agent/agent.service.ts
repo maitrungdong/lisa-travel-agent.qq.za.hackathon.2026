@@ -3,18 +3,19 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { DB, type Database } from "../db/database.module";
 import { JobsService } from "../jobs/jobs.service";
 import { MediaService, visionMime } from "../media/media.service";
+import { envInt, envStr } from "../pipeline/pipeline.types";
 import { ConversationService } from "../zalo/conversation.service";
 import { STATIC_SYSTEM, buildDynamicContext } from "./prompt";
 import { loadTripState, toolMap, toolsForApi, type ToolContext } from "./tools";
 
-const MODEL = process.env.ZINO_MODEL ?? "claude-sonnet-5";
+const MODEL = envStr("ZINO_MODEL", "claude-sonnet-5");
 const MAX_TOOL_ROUNDS = 8;
 const MAX_TOKENS = 2000;
 /**
  * Trần thời gian cho MỘT lượt. Chạm trần thì trả lời tạm còn hơn để user
  * nhìn "đang soạn tin" mãi rồi im — im lặng là kiểu hỏng tệ nhất trong chat.
  */
-const TURN_TIMEOUT_MS = Number(process.env.ZINO_TURN_TIMEOUT_MS ?? 75_000);
+const TURN_TIMEOUT_MS = envInt("ZINO_TURN_TIMEOUT_MS", 75_000);
 /**
  * Trần số ảnh đính vào một lượt. Mỗi ảnh tốn ~1.500 token — cả nhóm cùng gửi
  * ảnh mà không chặn thì một lượt phình lên chục nghìn token.
@@ -59,8 +60,17 @@ type Msg = Anthropic.MessageParam;
 @Injectable()
 export class AgentService {
   private readonly log = new Logger(AgentService.name);
+  /**
+   * `timeout` phải nhỏ hơn `TURN_TIMEOUT_MS`.
+   *
+   * `TURN_TIMEOUT_MS` chỉ được kiểm GIỮA các vòng tool (xem vòng lặp dưới), nên
+   * nếu một lời gọi API treo thì trần lượt không bao giờ có cơ hội chạm tới —
+   * job cứ nằm đó giữ khoá `dedupe_key` của hội thoại cho tới `STALE_LOCK_MS`
+   * 15 phút. 60s cho mỗi lời gọi để cả 8 vòng vẫn nằm trong tầm kiểm soát.
+   */
   private readonly client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    timeout: 60_000,
     maxRetries: 2
   });
 
@@ -99,8 +109,8 @@ export class AgentService {
         activeTripId = id;
         void this.conversations.setActiveTrip(input.conversationId, id);
       },
-      enqueue: async (kind, payload, runAt) => {
-        await this.jobs.enqueue(kind as never, payload, { runAt });
+      enqueue: async (kind, payload, runAt, dedupeKey) => {
+        await this.jobs.enqueue(kind as never, payload, { runAt, dedupeKey });
       },
       queueReply: (text, to) => {
         queued.push({ text, to });

@@ -4,7 +4,7 @@ import { AuthService } from "../auth/auth.service";
 import { JobsService } from "../jobs/jobs.service";
 import { MediaService } from "../media/media.service";
 import { PipelineService } from "../pipeline/pipeline.service";
-import { pipelineEnabled } from "../pipeline/pipeline.types";
+import { envInt, pipelineEnabled } from "../pipeline/pipeline.types";
 import { V7Service } from "../pipeline/v7.service";
 import { v7Enabled } from "../pipeline/v7.types";
 import { ConversationService } from "./conversation.service";
@@ -23,7 +23,7 @@ import { normalizeUpdate, type ZaloUpdate } from "./zalo.types";
  * không có cảm giác ì. 1,2s là điểm cân bằng — người dùng vẫn thấy "typing"
  * xuất hiện tức thì nên không nhận ra độ trễ này.
  */
-const BATCH_WINDOW_MS = Number(process.env.ZINO_BATCH_WINDOW_MS ?? 1200);
+const BATCH_WINDOW_MS = envInt("ZINO_BATCH_WINDOW_MS", 1200);
 
 @Controller("zalo")
 export class ZaloController {

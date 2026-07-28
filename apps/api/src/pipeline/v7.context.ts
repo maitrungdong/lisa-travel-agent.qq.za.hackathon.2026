@@ -41,12 +41,40 @@ export class V7ContextService {
   /* ================================================================ */
 
   /**
+   * Ngữ cảnh cho INTAKE — cố tình KHÔNG có `partner_network`.
+   *
+   * Intake chỉ làm một việc: quyết định `deliver` hay `brain`. Nó không đề
+   * xuất phương án, nên danh sách 30 OA đối tác kèm mô tả, khoảng giá và
+   * deeplink là token input thuần tuý lãng phí — và lãng phí ở MỌI tin nhắn,
+   * kể cả tin hỏi "mấy giờ đi", vì §2.2 bắt mọi tin đi qua Intake.
+   *
+   * Cái nó THỰC SỰ cần là ký ức nhóm và chuyến đang hoạt động: hai thứ đó
+   * quyết định Intake có hỏi lại thứ nhóm đã trả lời từ tuần trước hay không.
+   */
+  async buildForIntake(conversationId: number): Promise<JsonObject> {
+    return this.build(conversationId, { withPartners: false });
+  }
+
+  /**
+   * Ngữ cảnh cho BRAIN — đầy đủ, có `partner_network`.
+   *
+   * Brain là bên duy nhất đề xuất phương án, và mạng lưới OA là nguồn cung
+   * thật mà nó không thể tự tra bằng web_search.
+   */
+  async buildForBrain(conversationId: number): Promise<JsonObject> {
+    return this.build(conversationId, { withPartners: true });
+  }
+
+  /**
    * Ngữ cảnh Zino nhét thêm vào `thin_state` trước khi gọi agent.
    *
    * Tên khoá cố ý đặt tiền tố `zino_` để prompt của agent phân biệt được đâu
    * là state do chính chúng sinh ra, đâu là dữ liệu backend cung cấp.
    */
-  async build(conversationId: number): Promise<JsonObject> {
+  private async build(
+    conversationId: number,
+    opts: { withPartners: boolean }
+  ): Promise<JsonObject> {
     const [conv] = await this.db
       .select()
       .from(conversations)
@@ -56,7 +84,7 @@ export class V7ContextService {
     const [memory, trip, partners] = await Promise.all([
       this.loadMemory(conversationId),
       this.loadActiveTrip(conv?.activeTripId ?? null),
-      this.loadPartners()
+      opts.withPartners ? this.loadPartners() : Promise.resolve(null)
     ]);
 
     return {
@@ -64,8 +92,8 @@ export class V7ContextService {
       group_memory: memory,
       /** L2 — chuyến đi đang hoạt động, để agent không hỏi lại thứ đã biết */
       active_trip: trip,
-      /** Mạng lưới OA đối tác — nguồn cung thật, Brain không tự thấy được */
-      partner_network: partners,
+      /** Mạng lưới OA đối tác — chỉ Brain thấy; xem buildForIntake */
+      ...(partners ? { partner_network: partners } : {}),
       seen_count: conv?.seenCount ?? 0,
       chat_type: conv?.chatType ?? "direct"
     } as JsonObject;

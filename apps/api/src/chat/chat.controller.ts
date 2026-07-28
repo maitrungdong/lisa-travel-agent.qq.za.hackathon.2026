@@ -3,6 +3,7 @@ import { BadRequestException, Body, Controller, Logger, Param, ParseIntPipe, Pos
 import { z } from "zod";
 import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
 import { DecisionsService } from "../decisions/decisions.service";
+import { envStr } from "../pipeline/pipeline.types";
 import { TripsService } from "../trips/trips.service";
 
 const askSchema = z.object({
@@ -289,7 +290,7 @@ export class ChatController {
 
     try {
       const res = await this.anthropic.messages.create({
-        model: process.env.ZINO_CHAT_MODEL ?? "claude-haiku-4-5-20251001",
+        model: envStr("ZINO_CHAT_MODEL", "claude-haiku-4-5-20251001"),
         max_tokens: 500,
         system:
           "Bạn là Zino, trợ lý của một nhóm bạn đi du lịch. Trả lời NGẮN (2-3 câu), tiếng Việt, " +

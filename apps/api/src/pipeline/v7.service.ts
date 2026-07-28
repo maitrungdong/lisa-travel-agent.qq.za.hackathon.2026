@@ -11,8 +11,10 @@ import { V7ContextService } from "./v7.context";
 import { RUN_TTL_MS, TERMINAL_STATUSES, type RunStatus } from "./pipeline.types";
 import { applyStatePatch, type JsonObject } from "./state-patch";
 import {
+  MAX_CONSECUTIVE_FAILURES,
   parseAgentJson,
   SAFE_FALLBACK_MESSAGE,
+  TIMEOUT_MESSAGE,
   V7ValidationError,
   V7_AGENT_LABEL,
   V7_TIMEOUT_MS,
@@ -154,9 +156,9 @@ export class V7Service {
        *
        * Đây là dữ liệu DẪN XUẤT — dựng lại mỗi lượt, không lưu ngược vào DB.
        */
-      const zinoContext = await this.context.build(run.conversationId);
+      const zinoContext = await this.context.buildForIntake(run.conversationId);
       const stateForAgent = {
-        ...((run.thinState ?? {}) as JsonObject),
+        ...forAgent((run.thinState ?? {}) as JsonObject),
         zino_context: zinoContext
       };
 
@@ -176,6 +178,9 @@ export class V7Service {
       let state = this.context.stripDerived(
         applyStatePatch(run.thinState as JsonObject, intake.state_patch)
       );
+      // Intake chạy trót lọt = chuỗi lỗi đứt. Xoá bộ đếm để lần hỏng tới lại
+      // được hưởng đủ hạn mức, thay vì cộng dồn với sự cố từ hôm trước.
+      delete (state as Record<string, unknown>).zino_consecutive_failures;
       await this.save(run.id, { thinState: state });
 
       this.log.log(
@@ -229,13 +234,24 @@ export class V7Service {
       const typing = setInterval(() => void this.zalo.sendTyping(run.zaloChatId), 8_000);
       let brain;
       try {
-      brain = validateBrain(
-        await this.call(fresh ?? run, "BRAIN", {
-          intake_result: intake,
-          // Brain cần partner_network và ký ức nhóm không kém gì Intake
-          thin_state: { ...(((fresh?.thinState ?? state) as JsonObject) ?? {}), zino_context: zinoContext }
-        })
-      );
+        /**
+         * Brain — và CHỈ Brain — được thấy mạng lưới OA đối tác.
+         *
+         * Intake chỉ định tuyến nên nó không dùng tới danh sách partner; gửi
+         * cho nó là trả tiền token cho 30 dòng dữ liệu ở MỌI tin nhắn, kể cả
+         * tin hỏi "mấy giờ". Brain thì ngược lại: nó đề xuất phương án, và
+         * đây là nguồn cung thật mà nó không tự tra được.
+         */
+        const brainContext = await this.context.buildForBrain(run.conversationId);
+        brain = validateBrain(
+          await this.call(fresh ?? run, "BRAIN", {
+            intake_result: intake,
+            thin_state: {
+              ...forAgent(((fresh?.thinState ?? state) as JsonObject) ?? {}),
+              zino_context: brainContext
+            }
+          })
+        );
       } finally {
         clearInterval(typing);
       }
@@ -301,26 +317,54 @@ export class V7Service {
    * khác để "chữa cháy". Cả hai đều khiến lỗi trở nên khó truy hơn.
    */
   private async handleFailure(run: Run, tag: string, err: unknown): Promise<void> {
+    const recoverable =
+      err instanceof V7ValidationError ? SAFE_FALLBACK_MESSAGE
+      : err instanceof StageTimeoutError ? TIMEOUT_MESSAGE
+      : null;
+
+    // Lỗi mạng thoáng qua → ném lên cho JobsService retry với backoff.
+    // KHÔNG tính vào bộ đếm: hàng đợi đã có cơ chế bỏ cuộc sau 3 lần.
+    if (!recoverable) throw err;
+
     if (err instanceof V7ValidationError) {
       this.log.error(`${tag} ${V7_AGENT_LABEL[err.agent]}: ${err.reason}`);
       this.log.debug(`${tag} raw: ${JSON.stringify(err.raw).slice(0, 1000)}`);
-      await this.say(run, SAFE_FALLBACK_MESSAGE);
-      await this.save(run.id, { status: "awaiting_user" }); // flow còn sống, user gửi lại được
-      return;
+    } else {
+      // Session vẫn chạy tiếp phía Anthropic → gọi lại là hai lượt song song.
+      this.log.error(`${tag} timeout: ${(err as Error).message}`);
     }
 
-    if (err instanceof StageTimeoutError) {
-      // Session vẫn chạy tiếp phía Anthropic → gọi lại là hai lượt song song.
-      this.log.error(`${tag} timeout: ${err.message}`);
+    await this.say(run, recoverable);
+
+    /**
+     * Đếm lỗi LIÊN TIẾP, và tự mở cửa khi chạm trần.
+     *
+     * Giữ flow sống sau một lần hỏng là đúng — phần lớn lỗi ở đây là JSON bị
+     * cắt, lượt sau tự khỏi. Nhưng giữ sống VÔ HẠN thì lỗi dai dẳng biến thành
+     * cái bẫy: mỗi tin user gửi lại đều rơi đúng vào lỗi cũ, và cả nhóm không
+     * dùng được 20 tool còn lại cho tới khi TTL 24h quét.
+     *
+     * Bộ đếm nằm trong `thin_state` chứ không phải cột riêng: nó là trạng thái
+     * của lượt, sống chết theo run, và không cần thêm migration.
+     */
+    const state = (run.thinState ?? {}) as JsonObject;
+    const failures = Number(state.zino_consecutive_failures ?? 0) + 1;
+
+    if (failures >= MAX_CONSECUTIVE_FAILURES) {
+      this.log.warn(`${tag} hỏng ${failures} lượt liên tiếp → tự đóng flow`);
+      await this.abandon(run.id, "failed");
       await this.say(
         run,
-        "Mình tìm lâu quá mà chưa xong 😅 Bạn thử nhờ lại, hoặc thu hẹp yêu cầu giúp mình nhé."
+        "Mình tạm đóng luồng lên kế hoạch để bạn dùng lại các tính năng khác nhé. " +
+          "Khi nào cần thì nhờ mình lên plan lại từ đầu."
       );
-      await this.save(run.id, { status: "awaiting_user" });
       return;
     }
 
-    throw err; // lỗi mạng thoáng qua → JobsService retry
+    await this.save(run.id, {
+      status: "awaiting_user", // flow còn sống, user gửi lại được
+      thinState: { ...state, zino_consecutive_failures: failures } as never
+    });
   }
 
   private async call(run: Run, agent: V7Agent, payload: unknown): Promise<Record<string, unknown>> {
@@ -338,6 +382,16 @@ export class V7Service {
      * không đáng so với rủi ro đó.
      */
     const reuse = agent === "BRAIN" ? null : (sessions[agent] ?? null);
+
+    /**
+     * Session Brain của lượt TRƯỚC không bao giờ được dùng lại, mà `agentSessions`
+     * chỉ giữ được một id cho mỗi agent. Không xoá ở đây thì nó thành rác: `cleanup`
+     * lúc kết thúc run chỉ thấy id mới nhất, mọi session Brain trước đó biến mất
+     * khỏi tầm với vĩnh viễn.
+     */
+    if (agent === "BRAIN" && sessions.BRAIN) {
+      void this.driver.deleteSessions({ BRAIN: sessions.BRAIN });
+    }
 
     const { raw, sessionId, elapsedMs } = await this.driver.runAgent({
       agentId,
@@ -469,6 +523,19 @@ function mapIntakeStatus(status: string): RunStatus {
 
 function isTerminal(status: string): boolean {
   return status === "cancelled" || status === "blocked";
+}
+
+/**
+ * Gỡ phần state chỉ backend quan tâm trước khi gửi cho agent.
+ *
+ * `zino_consecutive_failures` là sổ kế toán nội bộ của `handleFailure`. Nó
+ * phải được LƯU (nếu không thì mỗi lượt lại đếm lại từ 0 và bẫy dai dẳng không
+ * bao giờ được phát hiện) nhưng KHÔNG được gửi đi — agent thấy một con số lạ
+ * trong state sẽ tìm cách diễn giải nó, và đó là chỗ hành vi trở nên khó đoán.
+ */
+function forAgent(state: JsonObject): JsonObject {
+  const { zino_consecutive_failures: _drop, ...rest } = state as Record<string, unknown>;
+  return rest as JsonObject;
 }
 
 function sleep(ms: number): Promise<void> {

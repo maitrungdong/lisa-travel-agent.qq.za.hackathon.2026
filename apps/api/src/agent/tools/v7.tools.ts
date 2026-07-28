@@ -88,12 +88,29 @@ export const v7Tools: ToolDef[] = [
         }
       }
 
-      await ctx.enqueue("v7_turn", {
-        runId,
-        userMessage: String(input.user_message ?? ""),
-        actorId: ctx.senderZaloId,
-        actorName: ctx.senderName
-      });
+      /**
+       * `dedupeKey` BẮT BUỘC ở đây.
+       *
+       * `JobsService.claim()` bỏ qua chốt serialize với job `dedupe_key IS NULL`,
+       * nên nếu để trống thì lượt mở flow này không chặn được lượt v7 kế tiếp do
+       * webhook đẩy vào (webhook luôn truyền `msg.chatId`). Hai lượt cùng hội
+       * thoại chạy song song sẽ ghi đè `thin_state` của nhau và gọi Brain hai
+       * lần — đúng thứ v7 §3.3 cấm.
+       *
+       * Hôm nay worker chạy tuần tự một container nên chưa vỡ, nhưng bảo đảm
+       * phải nằm ở hàng đợi chứ không nằm ở hình dạng triển khai.
+       */
+      await ctx.enqueue(
+        "v7_turn",
+        {
+          runId,
+          userMessage: String(input.user_message ?? ""),
+          actorId: ctx.senderZaloId,
+          actorName: ctx.senderName
+        },
+        undefined,
+        ctx.zaloChatId
+      );
 
       return {
         ok: true,

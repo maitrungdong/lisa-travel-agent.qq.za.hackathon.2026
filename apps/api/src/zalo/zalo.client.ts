@@ -56,9 +56,17 @@ export class ZaloClient {
     await this.call("sendChatAction", { chat_id: chatId, action: "typing" });
   }
 
-  /** Gửi text thô, KHÔNG tự cắt. Chỉ dùng khi đã tự chunk. */
-  async sendRaw(chatId: string, text: string): Promise<void> {
-    await this.call("sendMessage", { chat_id: chatId, text });
+  /**
+   * Gửi text thô, KHÔNG tự cắt. Chỉ dùng khi đã tự chunk.
+   *
+   * Trả `true` khi Zalo nhận. Phần lớn caller bỏ qua giá trị này — đúng, vì
+   * không gửi được một tin trả lời thì cũng chẳng làm gì hơn được. Nhưng nhắc
+   * hẹn thì KHÁC: nó đánh dấu `sent = true` sau khi gửi, nên phải biết thật sự
+   * gửi được hay chưa, nếu không một lần Zalo trục trặc là mất luôn lời nhắc
+   * mà không để lại dấu vết.
+   */
+  async sendRaw(chatId: string, text: string): Promise<boolean> {
+    return (await this.call("sendMessage", { chat_id: chatId, text })) !== null;
   }
 
   /**
@@ -93,16 +101,19 @@ export class ZaloClient {
 
   /**
    * Gửi nội dung markdown: tự render sang plain text, tự cắt ≤2000, gửi tuần tự.
-   * Trả về số tin đã gửi.
+   *
+   * Trả về số tin GỬI ĐƯỢC, không phải số tin định gửi — hai con số đó khác nhau
+   * khi Zalo từ chối, và caller cần biết sự khác biệt đó (xem `sendRaw`).
    */
   async sendMarkdown(chatId: string, markdown: string): Promise<number> {
     const parts = toZaloMessages(markdown);
+    let sent = 0;
     for (const [i, part] of parts.entries()) {
-      await this.sendRaw(chatId, part);
+      if (await this.sendRaw(chatId, part)) sent++;
       // Giãn nhẹ để Zalo giữ đúng thứ tự và tránh chạm rate limit
       if (i < parts.length - 1) await sleep(350);
     }
-    return parts.length;
+    return sent;
   }
 
   /** photoUrl PHẢI là URL https công khai — Zalo tự đi fetch. */

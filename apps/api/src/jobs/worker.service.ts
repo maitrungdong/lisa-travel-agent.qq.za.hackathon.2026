@@ -8,6 +8,7 @@ import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
 import { MerchantAgentService } from "../oa/merchant-agent.service";
 import { PipelineService, type StepJob } from "../pipeline/pipeline.service";
+import { envStr } from "../pipeline/pipeline.types";
 import { V7Service, type V7TurnJob } from "../pipeline/v7.service";
 import { v7Enabled } from "../pipeline/v7.types";
 import { renderRecapHtml, type RecapPayload } from "../trips/recap";
@@ -17,7 +18,20 @@ import { ZaloClient } from "../zalo/zalo.client";
 import { JobsService, type Job } from "./jobs.service";
 
 const POLL_MS = 1_000;
-const IDLE_MS = 3_000;
+/**
+ * Nhịp poll khi hàng đợi rỗng.
+ *
+ * Trước là 3.000ms và đó là nguồn độ trễ LỚN NHẤT mà người dùng cảm nhận được:
+ * webhook hẹn job chạy sau cửa sổ gộp 1,2s, nhưng sau mốc đó job còn nằm chờ
+ * thêm một khoảng phân bố đều trong [0, IDLE_MS] cho tới vòng poll kế. Tức là
+ * trung bình +1,5s và xấu nhất +3s cho MỌI câu trả lời, bất kể model nhanh cỡ
+ * nào.
+ *
+ * Hạ xuống 500ms đổi lấy nhiều truy vấn `claim()` rỗng hơn — chúng đi qua index
+ * `jobs_poll_idx (status, run_at)` và không trả về dòng nào, nên rẻ. Muốn triệt
+ * để thì dùng LISTEN/NOTIFY, nhưng đó là việc sau hackathon.
+ */
+const IDLE_MS = 500;
 const REFLECTION_DELAY_MS = 10 * 60 * 1000;
 
 /**
@@ -30,7 +44,20 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly log = new Logger(WorkerService.name);
   private running = false;
   private timer: NodeJS.Timeout | null = null;
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
+  /**
+   * Client cho việc chạy nền (deep_plan, recap intro, reflection).
+   *
+   * PHẢI có timeout. Job đang chạy giữ khoá `dedupe_key` của hội thoại, và
+   * `STALE_LOCK_MS` là 15 phút — một request treo không timeout sẽ khoá cả nhóm
+   * đó khỏi mọi lượt agent trong suốt 15 phút. `deep_plan` là việc nặng nhất ở
+   * đây (opus-5 + tối đa 8 lượt web_search) nên 5 phút là biên rộng nhưng vẫn
+   * an toàn so với 15.
+   */
+  private readonly anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    timeout: 5 * 60 * 1000,
+    maxRetries: 1
+  });
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -207,7 +234,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     );
 
     const res = await this.anthropic.messages.create({
-      model: process.env.ZINO_PLANNER_MODEL ?? "claude-opus-5",
+      model: envStr("ZINO_PLANNER_MODEL", "claude-opus-5"),
       max_tokens: 4000,
       system:
         "Bạn là chuyên gia lập lịch trình du lịch Việt Nam. Dùng web_search để tra CỨU THẬT: " +
@@ -293,7 +320,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
   private async writeRecapIntro(data: RecapPayload, tone: string): Promise<string | null> {
     try {
       const res = await this.anthropic.messages.create({
-        model: process.env.ZINO_RECAP_MODEL ?? "claude-sonnet-5",
+        model: envStr("ZINO_RECAP_MODEL", "claude-sonnet-5"),
         max_tokens: 300,
         system:
           "Bạn là Zino, trợ lý của nhóm bạn thân. Viết lời tựa cho trang tổng kết chuyến đi: " +
@@ -352,7 +379,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       .join("\n");
 
     const res = await this.anthropic.messages.create({
-      model: process.env.ZINO_REFLECTION_MODEL ?? "claude-haiku-4-5-20251001",
+      model: envStr("ZINO_REFLECTION_MODEL", "claude-haiku-4-5-20251001"),
       max_tokens: 1200,
       system: REFLECTION_PROMPT,
       messages: [
@@ -412,7 +439,20 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       });
       if (!conv) continue;
 
-      await this.zalo.sendMarkdown(conv.zaloChatId, `⏰ ${r.message}`);
+      /**
+       * CHỈ đánh dấu đã gửi khi Zalo thật sự nhận.
+       *
+       * Trước đây `sent = true` được ghi vô điều kiện, nên một cú 429 hay một
+       * lúc mạng chập chờn là lời nhắc biến mất vĩnh viễn — không ai nhận được,
+       * và không có dấu vết nào để biết. Để nguyên `sent = false` thì vòng lặp
+       * sau thử lại; tệ nhất là nhắc muộn vài giây, còn hơn không nhắc.
+       */
+      const sent = await this.zalo.sendMarkdown(conv.zaloChatId, `⏰ ${r.message}`);
+      if (sent === 0) {
+        this.log.warn(`Chưa gửi được nhắc nhở #${r.id} — giữ lại để thử vòng sau`);
+        continue;
+      }
+
       await this.db
         .update(reminders)
         .set({ sent: true, sentAt: new Date() })

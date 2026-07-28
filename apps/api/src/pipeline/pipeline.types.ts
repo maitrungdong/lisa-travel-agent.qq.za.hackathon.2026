@@ -32,6 +32,22 @@ export function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * Đọc chuỗi từ env — CHỊU ĐƯỢC CHUỖI RỖNG. Cùng một cái bẫy với `envInt`.
+ *
+ * `process.env.ZINO_MODEL ?? "claude-sonnet-5"` trông vô hại, nhưng `??` chỉ
+ * bắt null/undefined. Khai `ZINO_MODEL: ${ZINO_MODEL:-}` trong compose là biến
+ * ĐƯỢC ĐẶT bằng chuỗi rỗng, và kết quả là `model: ""` — API từ chối mọi request,
+ * bot câm hoàn toàn.
+ *
+ * Quy tắc: biến nào có mặt trong `docker-compose.yml` dạng `${X:-}` thì PHẢI
+ * đọc qua `envStr` hoặc `envInt`, không bao giờ qua `??`.
+ */
+export function envStr(name: string, fallback: string): string {
+  const raw = process.env[name];
+  return raw === undefined || raw === null || raw.trim() === "" ? fallback : raw.trim();
+}
+
 export const STAGE_NAME: Record<StageId, string> = {
   A: "Trip Alignment",
   B: "Offer Scout",
