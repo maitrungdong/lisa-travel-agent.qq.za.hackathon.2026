@@ -138,7 +138,122 @@ chính sách huỷ. Merchant agent chỉ trả lời **trong phạm vi** dữ li
 
 ---
 
-## 7. Phạm vi cho hackathon
+## 7. Runbook — test Partner Network từ đầu
+
+> Cần khoảng **60–90 phút**, phần lớn là thủ tục trên trang Zalo.
+
+### Bước 1 — Có một OA do BẠN sở hữu (20 phút)
+
+Không thể bắt OA của người khác uỷ quyền. Phải tự tạo một OA đóng vai merchant.
+
+1. Vào [oa.zalo.me](https://oa.zalo.me) → **Tạo Official Account**
+2. Chọn loại phù hợp, đặt tên kiểu *"Sunrise Resort Vũng Tàu (Demo)"*
+3. Điền thông tin cơ bản, không cần chờ xác thực để thử API
+
+> ⚠️ **Rủi ro lớn nhất của cả luồng này:** OA **chưa xác thực** có thể bị giới hạn
+> quyền gọi Open API. Nếu bước 5 trả lỗi permission, đó là nguyên nhân — và xác
+> thực OA cần giấy tờ doanh nghiệp, không kịp trong ngày. Test bước 5 sớm.
+
+### Bước 2 — Tạo ứng dụng trên developers.zalo.me (15 phút)
+
+1. [developers.zalo.me](https://developers.zalo.me) → **Tạo ứng dụng mới**
+2. Ghi lại **App ID** và **App Secret Key**
+3. Vào **Official Account → Cài đặt**, khai đúng hai URL sau (sai một ký tự là Zalo từ chối):
+
+```
+Redirect URI:  https://<PUBLIC_BASE_URL>/oa/callback
+Webhook URL:   https://<PUBLIC_BASE_URL>/oa/webhook
+```
+
+4. Ở mục Webhook, **bật sự kiện `user_send_text`**
+5. Copy **OA Secret Key** (dùng verify chữ ký webhook)
+
+### Bước 3 — Nạp cấu hình lên VPS (5 phút)
+
+```bash
+cd /opt/lisa
+sed -i '/^ZALO_APP_ID=/d; /^ZALO_APP_SECRET=/d; /^ZALO_OA_SECRET=/d' .env
+cat >> .env <<'EOF'
+ZALO_APP_ID=<app id>
+ZALO_APP_SECRET=<app secret key>
+ZALO_OA_SECRET=<oa secret key>
+EOF
+docker compose up -d && docker compose logs -f api
+```
+
+### Bước 4 — Uỷ quyền (2 phút)
+
+Mở trên trình duyệt, **đăng nhập bằng tài khoản quản trị OA vừa tạo**:
+
+```
+https://<PUBLIC_BASE_URL>/oa/connect
+```
+
+→ màn hình đồng ý của Zalo → bấm **Cho phép** → thấy trang "Kết nối thành công 🎉".
+
+Kiểm chứng:
+
+```bash
+curl -s https://<PUBLIC_BASE_URL>/oa/network
+```
+
+Phải thấy OA vừa kết nối trong danh sách.
+
+### Bước 5 — Nạp dữ liệu cho merchant agent (3 phút)
+
+Agent **chỉ trả lời trong phạm vi** dữ liệu này. Bỏ trống thì nó chỉ chào hỏi.
+
+```bash
+docker compose exec postgres psql -U lisa -d lisa -c "
+UPDATE partner_oas SET inventory_note = \$\$
+Loại phòng và giá (đã gồm ăn sáng, chưa VAT):
+- Deluxe hướng vườn  1.500.000đ/đêm, 2 khách
+- Deluxe hướng biển  1.900.000đ/đêm, 2 khách
+- Family Suite       2.800.000đ/đêm, 4 khách
+Tình trạng 12-14/08: còn 3 Deluxe hướng biển, 1 Family Suite.
+Chính sách huỷ: miễn phí trước 7 ngày, sau đó thu 50%.
+Nhận phòng 14h, trả phòng 12h. Có hồ bơi, spa, bãi đỗ xe miễn phí.
+Nhóm từ 6 khách giảm 10%.
+\$\$ WHERE connected = true;"
+```
+
+### Bước 6 — Chạy thử vòng lặp (5 phút)
+
+Từ **tài khoản Zalo cá nhân** (không phải tài khoản quản trị OA), nhắn cho OA vừa tạo:
+
+```
+Chào shop, nhóm mình 6 người muốn đặt phòng 12-14/08.
+Cho mình hỏi giá và chính sách huỷ nhé!
+```
+
+Kỳ vọng, trong ~5 giây:
+
+1. OA **tự trả lời** bằng đúng dữ liệu ở bước 5 — có giá thật, có ưu đãi nhóm 10%
+2. Nhóm chat Lisa nhận tóm tắt: *"📩 … vừa trả lời: …"*
+
+Theo dõi:
+
+```bash
+docker compose logs -f api | grep -iE "oa|lead|merchant"
+docker compose exec postgres psql -U lisa -d lisa -c \
+  "SELECT id, oa_user_id, status, left(last_user_message,50), left(last_reply,60) FROM oa_leads ORDER BY id DESC LIMIT 5;"
+```
+
+### Khi hỏng
+
+| Triệu chứng | Nguyên nhân | Xử lý |
+|---|---|---|
+| `/oa/connect` báo thiếu cấu hình | env chưa nạp | kiểm tra `docker compose exec api env \| grep ZALO_APP` |
+| Zalo báo redirect_uri không hợp lệ | khai sai trên developers.zalo.me | phải khớp **tuyệt đối**, kể cả dấu `/` cuối |
+| Callback báo "Kết nối thất bại" | code hết hạn (>10 phút) hoặc state mất | làm lại từ `/oa/connect` |
+| Nhắn OA mà log im lặng | webhook chưa khai, hoặc chưa bật `user_send_text` | kiểm tra lại mục Webhook |
+| Webhook bị từ chối chữ ký | `ZALO_OA_SECRET` sai | tạm bỏ trống biến này để bỏ qua verify, xác nhận luồng rồi khai lại |
+| Gửi tin OA lỗi permission | **OA chưa xác thực** | rủi ro đã cảnh báo ở bước 1 — không có đường vòng nhanh |
+| Agent trả lời chung chung | `inventory_note` rỗng | chạy lại bước 5 |
+
+---
+
+## 8. Phạm vi cho hackathon
 
 Không kịp mời merchant thật uỷ quyền trong hôm nay. Cách demo trung thực:
 
