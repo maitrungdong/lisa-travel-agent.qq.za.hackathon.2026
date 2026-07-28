@@ -12,6 +12,7 @@ import {
   STAGE_NAME,
   StageOutputError,
   TERMINAL_STATUSES,
+  envInt,
   type RunStatus,
   type StageId
 } from "./pipeline.types";
@@ -308,7 +309,7 @@ export class PipelineService {
        * thời gian di chuyển — và phải nói rõ điều đó trong simulation_disclosure.
        */
       geo_matrix: {},
-      n_variants: Number(process.env.ZINO_N_VARIANTS ?? 3)
+      n_variants: envInt("ZINO_N_VARIANTS", 3)
     };
 
     const { output, sessionId } = await this.call(run, "C", payload, label);

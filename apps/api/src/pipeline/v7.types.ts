@@ -10,6 +10,8 @@
  * parse JSON, áp state patch, kiểm invariant, gửi nguyên `message_to_user`.
  */
 
+import { envInt } from "./pipeline.types";
+
 export type V7Agent = "INTAKE" | "BRAIN" | "FINALIZER";
 
 export const V7_AGENT_LABEL: Record<V7Agent, string> = {
@@ -35,9 +37,9 @@ export function v7Enabled(): boolean {
  * SINH JSON, không phải tìm kiếm. Nên để rộng cho tới khi có số đo của Brain.
  */
 export const V7_TIMEOUT_MS: Record<V7Agent, number> = {
-  INTAKE: Number(process.env.ZINO_INTAKE_TIMEOUT_MS ?? 45_000),
-  BRAIN: Number(process.env.ZINO_BRAIN_TIMEOUT_MS ?? 300_000),
-  FINALIZER: Number(process.env.ZINO_FINALIZER_TIMEOUT_MS ?? 90_000)
+  INTAKE: envInt("ZINO_INTAKE_TIMEOUT_MS", 45_000),
+  BRAIN: envInt("ZINO_BRAIN_TIMEOUT_MS", 300_000),
+  FINALIZER: envInt("ZINO_FINALIZER_TIMEOUT_MS", 90_000)
 };
 
 /* ==================================================================== */

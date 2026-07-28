@@ -23,9 +23,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: zino
+      # ⚠ CHỈ có tác dụng khi volume RỖNG. Volume production đã init từ thời
+      # "lisa" nên role vẫn là lisa — đặt cứng "zino" ở đây là api đăng nhập
+      # sai và crash-loop với 28P01. Để env quyết, mặc định khớp production.
+      # Đổi thật sự cần dump/restore: xem docs/setup/10-doi-sang-bot-zino.md
+      POSTGRES_USER: ${POSTGRES_USER:-lisa}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD trong .env}
-      POSTGRES_DB: zino
+      POSTGRES_DB: ${POSTGRES_DB:-lisa}
       # Giờ VN cho cả server DB — reminder/lịch trình phụ thuộc trực tiếp vào đây
       TZ: Asia/Ho_Chi_Minh
       PGTZ: Asia/Ho_Chi_Minh
@@ -35,7 +39,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zino -d zino"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lisa} -d ${POSTGRES_DB:-lisa}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -62,7 +66,7 @@ services:
       PORT: "3000"
       # Giờ VN — để mặc định (UTC/EDT) là mọi reminder lệch 7–11 tiếng
       TZ: Asia/Ho_Chi_Minh
-      DATABASE_URL: postgres://zino:${POSTGRES_PASSWORD}@postgres:5432/zino
+      DATABASE_URL: postgres://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lisa}
       # Origin được phép gọi /api/ từ trình duyệt (Mini App chạy trên h5.zdn.vn)
       CORS_ORIGINS: ${CORS_ORIGINS:-https://h5.zdn.vn}
       # Bảo vệ các endpoint ghi dữ liệu (worker/agent gọi nội bộ)

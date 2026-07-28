@@ -113,7 +113,9 @@ export const members = pgTable(
       .notNull()
       .references(() => trips.id),
     zaloUserId: varchar("zalo_user_id", { length: 64 }).notNull(),
-    displayName: text("display_name").notNull()
+    displayName: text("display_name").notNull(),
+    /** member | organizer — người gọi @Zino tạo chuyến là organizer */
+    role: varchar("role", { length: 16 }).notNull().default("member")
   },
   (t) => [
     index("members_trip_idx").on(t.tripId),
@@ -511,4 +513,70 @@ export const personLinks = pgTable(
     uniqueIndex("person_links_app_uq").on(t.appUserId),
     uniqueIndex("person_links_bot_uq").on(t.zaloBotUserId)
   ]
+);
+
+/* ==========================================================================
+ * J2 — Quyết định nhóm. Bàn ở chat, chốt ở app.
+ *
+ * Thứ đáng giá nhất ở đây không phải kết quả mà là NGỮ CẢNH quanh kết quả:
+ * ai bầu gì, ai chưa bầu, Zino nghiêng cái nào và vì sao, ai chốt, có ngược
+ * đa số không. Chat không giữ được mấy thứ đó — cuộn lên là mất.
+ * ========================================================================== */
+
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: serial("id").primaryKey(),
+    tripId: bigint("trip_id", { mode: "number" })
+      .notNull()
+      .references(() => trips.id),
+    conversationId: bigint("conversation_id", { mode: "number" }),
+    /** stay | food | transport | activity | other */
+    kind: varchar("kind", { length: 24 }).notNull().default("other"),
+    title: text("title").notNull(),
+    /** open | tie | decided | cancelled */
+    status: varchar("status", { length: 16 }).notNull().default("open"),
+    recommendedOptionId: bigint("recommended_option_id", { mode: "number" }),
+    recommendationReason: text("recommendation_reason"),
+    decidedOptionId: bigint("decided_option_id", { mode: "number" }),
+    decidedBy: varchar("decided_by", { length: 64 }),
+    decidedByName: text("decided_by_name"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    againstMajority: boolean("against_majority").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [index("decisions_trip_idx").on(t.tripId, t.status)]
+);
+
+export const decisionOptions = pgTable(
+  "decision_options",
+  {
+    id: serial("id").primaryKey(),
+    decisionId: bigint("decision_id", { mode: "number" })
+      .notNull()
+      .references(() => decisions.id),
+    label: text("label").notNull(),
+    detail: text("detail"),
+    price: bigint("price", { mode: "number" }),
+    partnerOaId: varchar("partner_oa_id", { length: 64 }),
+    sortOrder: integer("sort_order").notNull().default(0)
+  },
+  (t) => [index("decision_options_dec_idx").on(t.decisionId, t.sortOrder)]
+);
+
+export const decisionVotes = pgTable(
+  "decision_votes",
+  {
+    id: serial("id").primaryKey(),
+    decisionId: bigint("decision_id", { mode: "number" })
+      .notNull()
+      .references(() => decisions.id),
+    optionId: bigint("option_id", { mode: "number" })
+      .notNull()
+      .references(() => decisionOptions.id),
+    zaloUserId: varchar("zalo_user_id", { length: 64 }).notNull(),
+    displayName: text("display_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [uniqueIndex("decision_votes_one_per_person_uq").on(t.decisionId, t.zaloUserId)]
 );

@@ -317,3 +317,68 @@ CREATE UNIQUE INDEX IF NOT EXISTS person_links_bot_uq ON person_links (zalo_bot_
 -- với DB đã có bảng từ lần deploy trước.
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS thin_state     jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS reply_contract jsonb;
+
+-- ============================================================================
+-- J2 — Quyết định nhóm: bàn ở chat, chốt ở app.
+--
+-- Đây là chỗ duy nhất trong sản phẩm thể hiện Zino dung hoà ý muốn xung đột của
+-- nhiều người, nên nó phải lưu được: ai bầu gì, ai chưa bầu, Zino nghiêng cái
+-- nào VÀ VÌ SAO, ai là người chốt, có ngược đa số không.
+--
+-- Bình chọn là bấm nút tường minh trong app. KHÔNG suy diễn từ reaction hay
+-- câu chữ trong chat — đó là bài NLU riêng, sai một lần là mất niềm tin.
+-- ============================================================================
+
+-- Vai trò trong chuyến. Người gọi @Zino tạo chuyến là người tổ chức.
+ALTER TABLE members ADD COLUMN IF NOT EXISTS role varchar(16) NOT NULL DEFAULT 'member';
+
+CREATE TABLE IF NOT EXISTS decisions (
+  id                     serial PRIMARY KEY,
+  trip_id                bigint      NOT NULL REFERENCES trips(id),
+  conversation_id        bigint,
+  /** stay | food | transport | activity | other */
+  kind                   varchar(24) NOT NULL DEFAULT 'other',
+  title                  text        NOT NULL,
+  /** open | tie | decided | cancelled */
+  status                 varchar(16) NOT NULL DEFAULT 'open',
+  /** Zino nghiêng phương án nào, và vì sao — phần "agent có suy nghĩ" */
+  recommended_option_id  bigint,
+  recommendation_reason  text,
+  decided_option_id      bigint,
+  decided_by             varchar(64),
+  decided_by_name        text,
+  decided_at             timestamptz,
+  /** Người tổ chức chốt ngược số đông → ghi lại, không giấu */
+  against_majority       boolean     NOT NULL DEFAULT false,
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS decisions_trip_idx ON decisions (trip_id, status);
+
+-- Mỗi chuyến chỉ được có MỘT quyết định đang mở tại một thời điểm.
+-- Nhiều thẻ cam cùng lúc thì nhóm không biết nhìn cái nào trước.
+CREATE UNIQUE INDEX IF NOT EXISTS decisions_one_open_uq
+  ON decisions (trip_id) WHERE status IN ('open','tie');
+
+CREATE TABLE IF NOT EXISTS decision_options (
+  id            serial PRIMARY KEY,
+  decision_id   bigint      NOT NULL REFERENCES decisions(id) ON DELETE CASCADE,
+  label         text        NOT NULL,
+  detail        text,
+  /** VND. NULL = chưa biết giá */
+  price         bigint,
+  partner_oa_id varchar(64),
+  sort_order    integer     NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS decision_options_dec_idx ON decision_options (decision_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS decision_votes (
+  id            serial PRIMARY KEY,
+  decision_id   bigint      NOT NULL REFERENCES decisions(id) ON DELETE CASCADE,
+  option_id     bigint      NOT NULL REFERENCES decision_options(id) ON DELETE CASCADE,
+  zalo_user_id  varchar(64) NOT NULL,
+  display_name  text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+-- Một người một phiếu cho mỗi quyết định; đổi ý thì UPDATE chứ không thêm dòng.
+CREATE UNIQUE INDEX IF NOT EXISTS decision_votes_one_per_person_uq
+  ON decision_votes (decision_id, zalo_user_id);

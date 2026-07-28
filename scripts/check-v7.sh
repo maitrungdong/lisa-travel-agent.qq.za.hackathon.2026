@@ -57,11 +57,37 @@ for v in ZINO_V7_ENABLED ZINO_AGENT_ENV_ID ZINO_AGENT_INTAKE_ID ZINO_AGENT_BRAIN
   val=$(env_of "$v")
   if [ -n "$val" ]; then ok "$v = $val"; else no "$v CHƯA ĐẶT"; FAIL=1; fi
 done
+# ─── Bẫy đã mất một giờ: shell ĐÈ .env ───────────────────────────────
+# Compose xếp ưu tiên: biến shell > file .env > default trong compose.
+# Chạy spike bằng `export ZINO_AGENT_API_KEY=...` rồi `docker compose up`
+# trong CÙNG session là container nhận key của shell, không phải của .env.
+for v in ZINO_AGENT_API_KEY ZINO_AGENT_INTAKE_ID ZINO_AGENT_BRAIN_ID ZINO_AGENT_FINALIZER_ID ZINO_AGENT_ENV_ID ZINO_V7_ENABLED; do
+  shell_val="${!v:-}"
+  [ -z "$shell_val" ] && continue
+  file_val=$(grep "^$v=" "$DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' "\r')
+  if [ -n "$file_val" ] && [ "$shell_val" != "$file_val" ]; then
+    no "$v: SHELL ĐANG ĐÈ .env  (shell=${shell_val:0:14}… vs file=${file_val:0:14}…)"
+    fix "unset $v   rồi: docker compose up -d --force-recreate api"
+    FAIL=1
+  fi
+done
+
 key=$(env_of ZINO_AGENT_API_KEY); akey=$(env_of ANTHROPIC_API_KEY)
 if [ -n "$key" ]; then ok "ZINO_AGENT_API_KEY có (${#key} ký tự)"
 elif [ -n "$akey" ]; then hm "ZINO_AGENT_API_KEY trống → rơi về ANTHROPIC_API_KEY"
      fix "3 agent v7 ở workspace KHÁC thì phải đặt key riêng, không sẽ 404"
 else no "không có key nào"; FAIL=1; fi
+
+# Container vs file — sửa .env mà chỉ `up -d` (không --force-recreate) thì
+# container giữ nguyên giá trị cũ, vì biến chỉ nạp lúc container SINH RA.
+file_key=$(grep '^ZINO_AGENT_API_KEY=' "$DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' "\r')
+if [ -n "$file_key" ] && [ -n "$key" ] && [ "$file_key" != "$key" ]; then
+  no "Key trong CONTAINER khác key trong .env"
+  echo "     file      : ${file_key:0:14}…${file_key: -6}"
+  echo "     container : ${key:0:14}…${key: -6}"
+  fix "docker compose up -d --force-recreate api   (up -d thường KHÔNG nạp lại biến)"
+  FAIL=1
+fi
 
 if [ "$(env_of ZINO_V7_ENABLED)" != "1" ]; then
   no "CỜ ĐANG TẮT — mọi đường v7 bị short-circuit"

@@ -14,6 +14,24 @@
 
 export type StageId = "A" | "B" | "C" | "D";
 
+/**
+ * Đọc số từ env — CHỊU ĐƯỢC CHUỖI RỖNG.
+ *
+ * Bẫy đã dính lúc 2:14 sáng 29/07: docker-compose khai
+ * `ZINO_INTAKE_TIMEOUT_MS: ${ZINO_INTAKE_TIMEOUT_MS:-}` nên container nhận
+ * biến ĐƯỢC ĐẶT nhưng RỖNG. `Number(process.env.X ?? 45000)` không cứu được
+ * vì `??` chỉ bắt null/undefined — kết quả `Number("")` = 0 → timeout 0ms →
+ * mọi stage abort tức thì.
+ *
+ * Dùng hàm này cho MỌI số đọc từ env.
+ */
+export function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw.trim() === "") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export const STAGE_NAME: Record<StageId, string> = {
   A: "Trip Alignment",
   B: "Offer Scout",
@@ -167,7 +185,7 @@ export const TERMINAL_STATUSES: readonly RunStatus[] = [
 ];
 
 /** Run bị bỏ quên quá lâu thì dọn, để nhóm mở được run mới. */
-export const RUN_TTL_MS = Number(process.env.ZINO_PIPELINE_TTL_MS ?? 24 * 60 * 60 * 1000);
+export const RUN_TTL_MS = envInt("ZINO_PIPELINE_TTL_MS", 24 * 60 * 60 * 1000);
 
 /**
  * Timeout theo stage — đo bằng spike thật, không phải đoán.
@@ -180,10 +198,10 @@ export const RUN_TTL_MS = Number(process.env.ZINO_PIPELINE_TTL_MS ?? 24 * 60 * 6
  * Để rộng cho tới khi đo được.
  */
 export const STAGE_TIMEOUT_MS: Record<StageId, number> = {
-  A: Number(process.env.ZINO_STAGE_A_TIMEOUT_MS ?? 45_000),
-  B: Number(process.env.ZINO_STAGE_B_TIMEOUT_MS ?? 180_000),
-  C: Number(process.env.ZINO_STAGE_C_TIMEOUT_MS ?? 180_000),
-  D: Number(process.env.ZINO_STAGE_D_TIMEOUT_MS ?? 60_000)
+  A: envInt("ZINO_STAGE_A_TIMEOUT_MS", 45_000),
+  B: envInt("ZINO_STAGE_B_TIMEOUT_MS", 180_000),
+  C: envInt("ZINO_STAGE_C_TIMEOUT_MS", 180_000),
+  D: envInt("ZINO_STAGE_D_TIMEOUT_MS", 60_000)
 };
 
 /** agent_id của 4 agent team dựng trên Claude Console. */
