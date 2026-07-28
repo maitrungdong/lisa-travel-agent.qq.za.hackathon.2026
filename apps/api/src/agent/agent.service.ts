@@ -103,6 +103,16 @@ export class AgentService {
     const toolsUsed: string[] = [];
     let rounds = 0;
     let finalText = "";
+    const turnStarted = Date.now();
+
+    // Tường thuật để `docker compose logs -f api` đọc được như một dòng thời gian.
+    // Quan sát được agent đang làm gì là điều kiện tối thiểu để debug nó.
+    const tag = `[${input.zaloChatId.slice(-6)}]`;
+    this.log.log(
+      `${tag} ▶ ${input.senderName}: ${preview(input.text) || "(ảnh)"}` +
+        `${input.imagePath ? " 📎ảnh" : ""}` +
+        ` · trip=${activeTripId ?? "chưa có"} · nhớ=${memory?.content ? "có" : "trống"}`
+    );
 
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
@@ -135,7 +145,17 @@ export class AgentService {
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const call of toolCalls) {
         toolsUsed.push(call.name);
+        const started = Date.now();
         const result = await this.execute(call.name, call.input as Record<string, unknown>, ctx);
+        const ms = Date.now() - started;
+
+        const args = summarizeArgs(call.input as Record<string, unknown>);
+        if (result.ok) {
+          this.log.log(`${tag}   🔧 ${call.name}(${args}) ✓ ${ms}ms`);
+        } else {
+          this.log.warn(`${tag}   🔧 ${call.name}(${args}) ✗ ${ms}ms — ${String(result.error)}`);
+        }
+
         results.push({
           type: "tool_result",
           tool_use_id: call.id,
@@ -145,6 +165,12 @@ export class AgentService {
       }
       messages.push({ role: "user", content: results });
     }
+
+    this.log.log(
+      `${tag} ◀ trả lời ${finalText.length} ký tự · ${rounds} vòng · ` +
+        `${toolsUsed.length ? toolsUsed.join(", ") : "không dùng tool"} · ` +
+        `${((Date.now() - turnStarted) / 1000).toFixed(1)}s`
+    );
 
     if (rounds >= MAX_TOOL_ROUNDS && !finalText) {
       this.log.warn(`Chạm trần ${MAX_TOOL_ROUNDS} vòng tool mà chưa có câu trả lời`);
@@ -163,11 +189,8 @@ export class AgentService {
     const tool = toolMap.get(name);
     if (!tool) return { ok: false, error: `Tool không tồn tại: ${name}` };
 
-    const started = Date.now();
     try {
-      const result = await tool.handler(input, ctx);
-      this.log.debug(`tool ${name} ${Date.now() - started}ms ok=${result.ok}`);
-      return result;
+      return await tool.handler(input, ctx);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.log.error(`tool ${name} nổ: ${message}`);
@@ -230,4 +253,34 @@ export class AgentService {
     while (messages.length && messages[0].role !== "user") messages.shift();
     return messages;
   }
+}
+
+/** Cắt ngắn để log không tràn màn hình. */
+function preview(text: string | null, max = 60): string {
+  if (!text) return "";
+  const one = text.replace(/\s+/g, " ").trim();
+  return one.length > max ? `${one.slice(0, max)}…` : one;
+}
+
+/**
+ * Tóm tắt input của tool cho dễ đọc trên log.
+ * Che các trường dài (URL ảnh, nội dung tin nhắn) — chỉ cần biết agent đang
+ * làm gì, không cần đọc nguyên payload.
+ */
+function summarizeArgs(input: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(input)) {
+    if (v === undefined || v === null || v === "") continue;
+    let s: string;
+    if (typeof v === "string") s = v.length > 28 ? `"${v.slice(0, 28)}…"` : `"${v}"`;
+    else if (Array.isArray(v)) s = `[${v.length}]`;
+    else if (typeof v === "object") s = "{…}";
+    else s = String(v);
+    parts.push(`${k}=${s}`);
+    if (parts.length >= 4) {
+      parts.push("…");
+      break;
+    }
+  }
+  return parts.join(" ");
 }
