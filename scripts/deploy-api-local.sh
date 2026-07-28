@@ -34,9 +34,12 @@ VPS_PORT="${VPS_PORT:-2222}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/zino}"
 VERIFY=1
 
+DIRTY=0
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-verify) VERIFY=0; shift ;;
+    --dirty)     DIRTY=1; shift ;;
     -h|--help)   sed -n '2,26p' "$0"; exit 0 ;;
     *) echo "Tham số lạ: $1" >&2; exit 1 ;;
   esac
@@ -80,12 +83,46 @@ fi
 # ---------------------------------------------------------------------------
 step "3/6 · Đẩy source lên VPS"
 
+# ---------------------------------------------------------------------------
+# MẶC ĐỊNH ĐẨY TỪ COMMIT (git archive HEAD), KHÔNG phải thư mục làm việc.
+#
+# Bản đầu tar thẳng working tree. Nghe thì tiện, nhưng repo này có nhiều phiên
+# làm việc song song — và nó đã cắn thật: một file đang sửa dở của người khác
+# (v7.service.ts) đi vào image rồi làm chết `tsc` giữa lúc deploy, trong khi
+# thay đổi của mình không liên quan gì.
+#
+# Đẩy từ HEAD được hai thứ cùng lúc: image LUÔN khớp với một commit (truy được,
+# rollback được), và WIP của người khác không bao giờ lọt vào production.
+#
+# Cần deploy code chưa commit thì phải nói rõ ý định: --dirty
+# ---------------------------------------------------------------------------
+
 # tar qua ssh thay vì rsync: Rocky tối giản có thể không cài sẵn rsync, còn tar
 # thì luôn có. Loại node_modules/dist — Dockerfile tự cài và tự build.
 $SSH "rm -rf $REMOTE_DIR/build/api && mkdir -p $REMOTE_DIR/build/api"
-tar czf - -C "$ROOT/apps" \
-    --exclude=api/node_modules --exclude=api/dist --exclude=api/.env \
-    api | $SSH "tar xzf - -C $REMOTE_DIR/build"
+
+if [ "$DIRTY" = 1 ]; then
+  warn "đẩy THƯ MỤC LÀM VIỆC (--dirty) — gồm cả file chưa commit của mọi người"
+  tar czf - -C "$ROOT/apps" \
+      --exclude=api/node_modules --exclude=api/dist --exclude=api/.env \
+      api | $SSH "tar xzf - -C $REMOTE_DIR/build"
+else
+  git -C "$ROOT" rev-parse --verify HEAD >/dev/null 2>&1 ||
+    die "Không có commit nào để deploy. Commit trước, hoặc dùng --dirty nếu thật sự cần."
+
+  # `HEAD:apps/api` xuất thẳng nội dung thư mục con, khỏi phải strip prefix
+  git -C "$ROOT" archive HEAD:apps/api | $SSH "tar xf - -C $REMOTE_DIR/build/api" ||
+    die "git archive thất bại"
+
+  # Nói rõ cái gì KHÔNG được deploy — im lặng ở đây là kiểu bất ngờ tệ nhất:
+  # sửa xong, deploy xong, mở app vẫn thấy hành vi cũ.
+  UNCOMMITTED="$(git -C "$ROOT" status --porcelain apps/api | head -20)"
+  if [ -n "$UNCOMMITTED" ]; then
+    warn "các thay đổi sau CHƯA COMMIT nên KHÔNG có trong bản deploy này:"
+    printf '%s\n' "$UNCOMMITTED" | sed 's/^/           /'
+    warn "muốn deploy chúng: commit rồi chạy lại, hoặc dùng --dirty"
+  fi
+fi
 
 # tar giữ nguyên mode của máy dev. Thư mục làm việc 0600 → file vào image cũng
 # 0600 thuộc root, mà container chạy USER node → EACCES lúc đọc bootstrap.sql,

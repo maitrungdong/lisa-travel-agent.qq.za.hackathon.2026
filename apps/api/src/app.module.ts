@@ -2,10 +2,10 @@ import { Module } from "@nestjs/common";
 import { AgentService } from "./agent/agent.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
+import { ChatController } from "./chat/chat.controller";
 import { DatabaseModule } from "./db/database.module";
 import { DecisionsController } from "./decisions/decisions.controller";
 import { DecisionsService } from "./decisions/decisions.service";
-import { DebugController } from "./debug.controller";
 import { HealthController } from "./health.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { WorkerService } from "./jobs/worker.service";
@@ -49,8 +49,19 @@ import { ZaloController } from "./zalo/zalo.controller";
     DecisionsController,
     // J4 — người dùng tự thêm/sửa khoản chi, tick đã trả
     ExpensesController,
-    // TẠM — đo namespace id giữa Bot API và Mini App. Xoá sau khi đo xong.
-    DebugController
+    // Chat trong app — nơi Zino vừa nói vừa đưa nút bấm (Bot API không có nút)
+    ChatController
+    /**
+     * ĐÃ GỠ `DebugController` (29/07).
+     *
+     * Nó phơi `/debug/conversations` và `/debug/match` ra public, không guard —
+     * id nhóm Zalo và tên thành viên của mọi hội thoại. Chính file đó tự ghi
+     * "XOÁ FILE NÀY sau khi đã đo xong"; việc đo namespace id giữa Bot API và
+     * Mini App đã xong nên gỡ khỏi đây. File vẫn còn trong repo, chỉ là không
+     * được nạp nữa.
+     *
+     * Cần đo lại thì thêm dòng về, đo, rồi gỡ ngay — đừng để qua đêm.
+     */
   ],
   providers: [
     TripsService,
