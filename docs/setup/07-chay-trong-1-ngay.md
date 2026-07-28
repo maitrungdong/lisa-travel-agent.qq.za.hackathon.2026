@@ -8,8 +8,8 @@ Thông tin cố định:
 | | |
 |---|---|
 | VPS | `118.102.2.135`, SSH **cổng 2222**, user `zah19-team35` |
-| Domain | `https://zah19-team35.123c.vn` (wildcard `*.123c.vn` chỉ phủ 1 cấp) |
-| Webhook | `https://zah19-team35.123c.vn/zalo/webhook` |
+| Domain | `https://zah-35.123c.vn` (wildcard `*.123c.vn` chỉ phủ 1 cấp) |
+| Webhook | `https://zah-35.123c.vn/zalo/webhook` |
 | Bot | `Bot Đông Kiếm Em` — `can_join_groups: true` ✅ |
 
 ---
@@ -85,8 +85,8 @@ AGENT_API_KEY=
 ZALO_BOT_TOKEN=
 ZALO_WEBHOOK_SECRET=
 ANTHROPIC_API_KEY=
-PUBLIC_BASE_URL=https://zah19-team35.123c.vn
-CORS_ORIGINS=https://h5.zdn.vn,https://zah19-team35.123c.vn
+PUBLIC_BASE_URL=https://zah-35.123c.vn
+CORS_ORIGINS=https://h5.zdn.vn,https://zah-35.123c.vn
 EOF
 ```
 
@@ -110,7 +110,7 @@ Schema tự tạo lúc boot từ `bootstrap.sql` (idempotent) — **không cần
 
 ```bash
 curl -s http://127.0.0.1:3000/health              # từ VPS
-curl -s https://zah19-team35.123c.vn/api/health   # từ máy dev — quan trọng hơn
+curl -s https://zah-35.123c.vn/api/health   # từ máy dev — quan trọng hơn
 ```
 
 Nếu lệnh thứ 2 fail mà lệnh 1 ok → vấn đề ở nginx, không phải ở app. Xem
@@ -126,7 +126,7 @@ SECRET='<ZALO_WEBHOOK_SECRET đúng như trong .env>'
 
 curl -s -X POST "https://bot-api.zaloplatforms.com/bot$BOT_TOKEN/setWebhook" \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"https://zah19-team35.123c.vn/zalo/webhook\",
+  -d "{\"url\":\"https://zah-35.123c.vn/zalo/webhook\",
        \"secret_token\":\"$SECRET\",
        \"drop_pending_updates\":true}"
 ```
@@ -134,7 +134,7 @@ curl -s -X POST "https://bot-api.zaloplatforms.com/bot$BOT_TOKEN/setWebhook" \
 **Verify:**
 
 ```bash
-curl -s https://zah19-team35.123c.vn/zalo/info | jq
+curl -s https://zah-35.123c.vn/zalo/info | jq
 # me.can_join_groups = true, webhook.url = đúng URL trên
 ```
 
@@ -223,9 +223,9 @@ docker compose exec postgres psql -U lisa -d lisa \
 |---|---|---|
 | Nhắn bot không thấy gì trong log | `secret_token` lệch | Gọi lại `setWebhook` với đúng secret trong `.env` |
 | `curl https://.../api/health` fail nhưng `127.0.0.1:3000` ok | nginx conf | `sudo nginx -t`, xem `/var/log/nginx/error.log` |
-| Cert invalid khi Zalo gọi webhook | Dùng subdomain 2 cấp | Domain **phải** là `zah19-team35.123c.vn` |
+| Cert invalid khi Zalo gọi webhook | Dùng subdomain 2 cấp | Domain **phải** là `zah-35.123c.vn` |
 | Reminder lệch giờ | Timezone | `timedatectl set-timezone Asia/Ho_Chi_Minh` rồi `docker compose restart` |
-| Ảnh gửi ra không hiện | `PUBLIC_BASE_URL` sai hoặc `/media/` chưa serve | `curl -I https://zah19-team35.123c.vn/media/<file>` |
+| Ảnh gửi ra không hiện | `PUBLIC_BASE_URL` sai hoặc `/media/` chưa serve | `curl -I https://zah-35.123c.vn/media/<file>` |
 | Lisa trả lời chậm >10s | web_search chạy trong hot path | Bình thường nếu có tra cứu; nếu mọi lượt đều chậm, xem log tool |
 | Job kẹt `running` | Worker chết giữa chừng | Tự thu hồi sau 5 phút; muốn ngay: `UPDATE jobs SET status='pending' WHERE status='running'` |
 

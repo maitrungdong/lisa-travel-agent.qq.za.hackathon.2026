@@ -147,11 +147,11 @@ sudo chmod 644 /opt/lisa/certs/*
 
 ```dotenv
 # /opt/lisa/.env
-API_HOST=zah19-team35.123c.vn          # phải khớp phạm vi cert
+API_HOST=zah-35.123c.vn          # phải khớp phạm vi cert
 CADDY_TLS=tls /certs/cert.pem /certs/key.pem
 ```
 
-Lưu ý wildcard chỉ phủ **1 cấp**: `*.123c.vn` hợp lệ cho `zah19-team35.123c.vn`, **không** cho `api.zah19-team35.123c.vn`. Vì vậy `API_HOST` mới tồn tại — mặc định `api.<DOMAIN>` sẽ làm cert invalid.
+Lưu ý wildcard chỉ phủ **1 cấp**: `*.123c.vn` hợp lệ cho `zah-35.123c.vn`, **không** cho `api.zah-35.123c.vn`. Vì vậy `API_HOST` mới tồn tại — mặc định `api.<DOMAIN>` sẽ làm cert invalid.
 
 **(b) BTC cấp subdomain nhưng không cấp cert** → để `CADDY_TLS` trống, Caddy tự xin Let's Encrypt. Cần inbound port 80 mở (§4) và DNS đã trỏ đúng.
 

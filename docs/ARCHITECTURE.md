@@ -349,8 +349,8 @@ docker compose ──► postgres:16  (127.0.0.1:5432)  │
               └─► api (NestJS + worker)  :3000 ───┘
 ```
 
-⚠️ Wildcard `*.123c.vn` chỉ phủ **1 cấp** → domain phải là `zah19-team35.123c.vn`,
-**không dùng được** `api.zah19-team35.123c.vn`.
+⚠️ Wildcard `*.123c.vn` chỉ phủ **1 cấp** → domain phải là `zah-35.123c.vn`,
+**không dùng được** `api.zah-35.123c.vn`.
 
 ⚠️ Múi giờ VPS đang là `America/New_York` → **`timedatectl set-timezone Asia/Ho_Chi_Minh`**
 trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
@@ -411,7 +411,7 @@ trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
 | Việc | Thời gian | Chặn cái gì | Rủi ro |
 |---|---|---|---|
 | **A. Chạy `getMe`** với bot token, xem `can_join_groups` | 2 phút | Toàn bộ demo nhóm | 🔴 Nếu `false` → phải chuyển demo sang chat 1-1. **Kiểm tra ĐẦU TIÊN** |
-| **B. Xác nhận domain team** (`zah19-team35.123c.vn`?) + SSH key vào VPS cổng 2222 | 15 phút | Deploy, webhook, media | 🟡 |
+| **B. Xác nhận domain team** (`zah-35.123c.vn`?) + SSH key vào VPS cổng 2222 | 15 phút | Deploy, webhook, media | 🟡 |
 | **C. Zalo Mini App**: app đã đăng ký chưa, `zmp` token còn hạn không | 30 phút | Hạng mục 12 + openChat | 🔴 Nếu chưa có app → 2–4h thủ tục tôi không làm hộ được → **rơi mất điểm ăn tiền nhất** |
 | **D. Anthropic API key** + xin quyền Managed Agents beta | 20 phút | Hạng mục 11 | 🟡 Beta có thể phải điền form chờ duyệt → nếu không kịp, Planner/Recap chạy bằng Messages API thường (mất chữ "Managed Agents" nhưng demo y hệt) |
 

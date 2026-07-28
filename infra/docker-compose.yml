@@ -70,7 +70,7 @@ services:
       # Zalo gửi kèm header X-Bot-Api-Secret-Token = đúng giá trị này ở mỗi webhook
       ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:?thiếu ZALO_WEBHOOK_SECRET trong .env}
       # Dùng để dựng URL công khai cho ảnh (sendPhoto cần URL public) và link recap
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://zah19-team35.123c.vn}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://zah-35.123c.vn}
       # Đường dẫn TRONG container; nginx serve lại từ thư mục host (xem volumes)
       MEDIA_DIR: /data/media
       RECAP_DIR: /data/recap

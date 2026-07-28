@@ -133,7 +133,7 @@ gh secret set ZMP_TOKEN --env production  --body "$(grep '^ZMP_TOKEN=' .env | cu
 **rồi deploy lại** — URL nằm cứng trong bundle, sửa variable không đủ:
 
 ```bash
-gh variable set API_BASE_URL --env development --body "https://zah19-team35.123c.vn/api"
+gh variable set API_BASE_URL --env development --body "https://zah-35.123c.vn/api"
 gh workflow run "Deploy Mini App (reusable)" -f environment=development -f version-status=development -f description="đổi sang domain BTC"
 ```
 

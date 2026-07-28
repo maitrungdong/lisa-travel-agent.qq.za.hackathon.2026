@@ -192,7 +192,7 @@ fi
 # =============================================================================
 # 5. NGINX — bước rủi ro nhất, làm thật cẩn thận
 # =============================================================================
-step "5/6 · nginx vhost zah19-team35.123c.vn"
+step "5/6 · nginx vhost zah-35.123c.vn"
 
 if [ "${LISA_SKIP_NGINX:-0}" = 1 ]; then
   warn "LISA_SKIP_NGINX=1 → bỏ qua bước nginx"
@@ -359,7 +359,7 @@ ${C_GRN}Bootstrap xong.${C_OFF} Việc tiếp theo (xem docs/setup/07-deploy-1-n
        VPS_HOST=118.102.2.135 VPS_USER=$TARGET_USER VPS_PORT=$SSH_PORT bash scripts/deploy.sh
 
   3. Trỏ webhook Zalo về:
-       https://zah19-team35.123c.vn/zalo/webhook
+       https://zah-35.123c.vn/zalo/webhook
 
 ${C_DIM}Nếu vừa được thêm vào group docker thì logout/login lại trước khi chạy lệnh docker.${C_OFF}
 MSG
