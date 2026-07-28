@@ -11,7 +11,15 @@ export type JobKind =
   | "recap"
   | "reminder"
   /** Partner Network: user nhắn OA đối tác → agent trả lời thay merchant */
-  | "merchant_reply";
+  | "merchant_reply"
+  /**
+   * Một stage của pipeline 4 agent. Job xong thì tự đẩy job kế vào hàng đợi,
+   * nên A→B→C là ba job nối nhau chứ không phải một vòng lặp dài — retry và
+   * backoff nhờ vậy hoạt động ở mức từng stage.
+   */
+  | "pipeline_step"
+  /** Một lượt v7: Intake → (deliver | Brain → Finalizer). Xem V7Service. */
+  | "v7_turn";
 
 export interface Job {
   id: number;
@@ -22,8 +30,15 @@ export interface Job {
 }
 
 const MAX_ATTEMPTS = 3;
-/** Job "running" quá lâu coi như worker chết → cho phép nhận lại */
-const STALE_LOCK_MS = 5 * 60 * 1000;
+/**
+ * Job "running" quá lâu coi như worker chết → cho phép nhận lại.
+ *
+ * PHẢI LỚN HƠN tổng timeout của lượt dài nhất. Một lượt v7 là
+ * Intake 45s + Brain 300s + Finalizer 90s = 435s; để 5 phút như trước thì
+ * giữa lúc Brain đang chạy, `claim()` đã coi khoá là hết hạn và một worker
+ * thứ hai có thể chạy song song cùng hội thoại — đúng thứ v7 §3.3 cấm.
+ */
+const STALE_LOCK_MS = 15 * 60 * 1000;
 
 /**
  * Hàng đợi chạy trên Postgres — không cần Redis cho quy mô hackathon.

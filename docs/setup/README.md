@@ -11,5 +11,6 @@ Bộ tài liệu tham chiếu để dựng, chạy và deploy toàn bộ hệ th
 | [`05-ci-cd-zalo-mini-app.md`](./05-ci-cd-zalo-mini-app.md) | Deep-dive CI/CD Zalo Mini App: zmp-cli, token, version status (thiết kế chuẩn production) |
 | [`06-verify-vps.md`](./06-verify-vps.md) | Vừa nhận VPS từ BTC: recon + verify đủ điều kiện trước khi bootstrap |
 | [`10-doi-sang-bot-zino.md`](./10-doi-sang-bot-zino.md) | **Đổi Lisa → Zino**: bot token mới, rename repo/VPS/DB, ghép lại pairing |
+| [`11-go-live-production.md`](./11-go-live-production.md) | **Go-live**: xác thực Mini App, xin quyền, bản TESTING, gửi xét duyệt, publish |
 
-Đường tắt: mới clone repo → đọc `02`; vừa được cấp VPS → `06` rồi `04`; chuẩn bị demo → checklist cuối `04`.
+Đường tắt: mới clone repo → đọc `02`; vừa được cấp VPS → `06` rồi `04`; chuẩn bị demo → checklist cuối `04`; đưa Mini App tới người dùng thật → `08` rồi `11`.

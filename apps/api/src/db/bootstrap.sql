@@ -226,3 +226,94 @@ CREATE TABLE IF NOT EXISTS oa_leads (
 );
 CREATE INDEX        IF NOT EXISTS oa_leads_partner_idx     ON oa_leads (partner_oa_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS oa_leads_partner_user_uq ON oa_leads (partner_oa_id, oa_user_id);
+
+-- ============================================================================
+-- Pipeline lên kế hoạch — 4 agent chạy tuần tự A → B → C → [chờ owner] → D.
+-- Một run sống hàng giờ và qua nhiều tin nhắn nên phải nằm ở DB, không phải RAM.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+  id                     serial PRIMARY KEY,
+  conversation_id        bigint      NOT NULL REFERENCES conversations(id),
+  zalo_chat_id           varchar(64) NOT NULL,
+  owner_zalo_id          varchar(64) NOT NULL,
+  owner_name             text,
+  stage                  varchar(1),
+  status                 varchar(24) NOT NULL DEFAULT 'running_a',
+  trace_id               varchar(36) NOT NULL,
+  agent_sessions         jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  alignment_result       jsonb,
+  sourcing_result        jsonb,
+  planning_result        jsonb,
+  package_result         jsonb,
+  pending_question       jsonb,
+  scout_retries          integer     NOT NULL DEFAULT 0,
+  selected_candidate_id  varchar(64),
+  expires_at             timestamptz NOT NULL,
+  created_at             timestamptz NOT NULL DEFAULT now(),
+  updated_at             timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS pipeline_runs_conv_idx ON pipeline_runs (conversation_id, status);
+
+-- Một hội thoại chỉ được có TỐI ĐA MỘT run chưa kết thúc.
+-- Đây là chốt chặn cho tình huống hai người trong nhóm cùng nhờ lên kế hoạch:
+-- người thứ hai sẽ nhận lỗi insert thay vì tạo ra run thứ hai chạy song song.
+CREATE UNIQUE INDEX IF NOT EXISTS pipeline_runs_one_active_uq
+  ON pipeline_runs (conversation_id)
+  WHERE status NOT IN ('done','blocked','failed','expired','cancelled');
+
+-- ============================================================================
+-- Danh tính Mini App ↔ thành viên nhóm.
+--
+-- Vì sao cần bảng nối: Zalo Bot API và Zalo Mini App nhìn CÙNG một con người
+-- dưới hai id khác namespace. Bot thấy `from.id` (vd `e8580118d94d3013695c`),
+-- Mini App thấy id định danh theo Zalo App (chuỗi số dài). Zalo không có API
+-- nào nối hai cái đó, nên phải nối một lần bằng mã ghép đôi.
+-- ============================================================================
+
+-- Người dùng nhìn từ phía Mini App. `zalo_app_user_id` là id Zalo trả về khi
+-- server verify access token qua graph.zalo.me — KHÔNG phải giá trị client khai.
+CREATE TABLE IF NOT EXISTS app_users (
+  id                serial PRIMARY KEY,
+  zalo_app_user_id  varchar(64) NOT NULL,
+  display_name      text,
+  avatar_url        text,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  last_seen_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS app_users_zalo_uq ON app_users (zalo_app_user_id);
+
+-- Mã ghép đôi 6 số. Hạn ngắn + dùng một lần vì nó được gõ công khai trong
+-- nhóm chat: ai cũng đọc được, nên giá trị của nó phải hết hạn nhanh.
+CREATE TABLE IF NOT EXISTS link_codes (
+  id           serial PRIMARY KEY,
+  code         varchar(8)  NOT NULL,
+  app_user_id  bigint      NOT NULL REFERENCES app_users(id),
+  expires_at   timestamptz NOT NULL,
+  used_at      timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+-- Chỉ chặn trùng trên các mã CÒN SỐNG — mã đã dùng/hết hạn được phép tái sinh.
+CREATE UNIQUE INDEX IF NOT EXISTS link_codes_active_uq
+  ON link_codes (code) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS link_codes_user_idx ON link_codes (app_user_id, created_at);
+
+-- Kết quả nối: một người Mini App ↔ một id phía Bot.
+-- UNIQUE cả hai chiều: một tài khoản Zalo chỉ là một người trong nhóm, và
+-- ngược lại — nếu không, hai người có thể cùng nhận mình là "Đông".
+CREATE TABLE IF NOT EXISTS person_links (
+  id               serial PRIMARY KEY,
+  app_user_id      bigint      NOT NULL REFERENCES app_users(id),
+  zalo_bot_user_id varchar(64) NOT NULL,
+  display_name     text,
+  linked_via       varchar(16) NOT NULL DEFAULT 'code',
+  conversation_id  bigint,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS person_links_app_uq ON person_links (app_user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS person_links_bot_uq ON person_links (zalo_bot_user_id);
+
+-- v7: thin state + reply contract. ADD COLUMN IF NOT EXISTS nên chạy lại vô hại
+-- với DB đã có bảng từ lần deploy trước.
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS thin_state     jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS reply_contract jsonb;

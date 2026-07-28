@@ -207,13 +207,15 @@ export function recapPageUrl(tripId: number): string {
   const override = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/$/, "");
   if (override) return `${override}/trip/${tripId}/`;
 
-  // `/trip/:id/` là route của nginx (file tĩnh worker ghi ra). Chỉ tồn tại khi
-  // API nằm sau nginx, tức VITE_API_BASE_URL có hậu tố /api. Chạy local
-  // (localhost:3000, không nginx) thì gọi thẳng route HTML của API — nếu không
-  // nút này 404 và tưởng nhầm là code hỏng.
-  if (/\/api\/?$/.test(BASE)) {
-    return `${BASE.replace(/\/api\/?$/, "")}/trip/${tripId}/`;
-  }
+  // Luôn dùng route API, KHÔNG dùng `/trip/:id/`.
+  //
+  // `/trip/:id/` là file TĨNH, chỉ tồn tại sau khi job recap của Zino chạy xong.
+  // Chuyến vừa tạo — hoặc chuyến seed thẳng vào DB — thì file chưa có và nginx
+  // trả 404, người dùng thấy "not found" và tưởng app hỏng.
+  //
+  // `/trips/:id/recap.html` dựng trang ngay lúc request nên lúc nào cũng có, và
+  // nội dung y hệt (cùng renderRecapHtml). Link `/trip/:id/` đẹp hơn thì để dành
+  // cho Zino gửi trong chat — lúc đó nó đã thật sự dựng xong file.
   return `${BASE.replace(/\/$/, "")}/trips/${tripId}/recap.html`;
 }
 

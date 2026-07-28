@@ -65,6 +65,9 @@ services:
       # Partner Network — để trống là tắt tính năng, phần còn lại vẫn chạy bình thường
       ZALO_APP_ID: ${ZALO_APP_ID:-}
       ZALO_APP_SECRET: ${ZALO_APP_SECRET:-}
+      # Ký JWT phiên của Mini App. Bỏ trống → dùng AGENT_API_KEY (vẫn là bí mật
+      # của server). Đổi giá trị này = đăng xuất toàn bộ người dùng.
+      SESSION_SECRET: ${SESSION_SECRET:-}
       ZALO_OA_SECRET: ${ZALO_OA_SECRET:-}
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?thiếu ZALO_BOT_TOKEN trong .env}
       # Zalo gửi kèm header X-Bot-Api-Secret-Token = đúng giá trị này ở mỗi webhook

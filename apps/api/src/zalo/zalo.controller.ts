@@ -1,7 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpCode, Logger, Post } from "@nestjs/common";
+import { AuthService } from "../auth/auth.service";
 import { JobsService } from "../jobs/jobs.service";
 import { MediaService } from "../media/media.service";
+import { PipelineService } from "../pipeline/pipeline.service";
+import { pipelineEnabled } from "../pipeline/pipeline.types";
+import { V7Service } from "../pipeline/v7.service";
+import { v7Enabled } from "../pipeline/v7.types";
 import { ConversationService } from "./conversation.service";
 import { ZaloClient } from "./zalo.client";
 import { normalizeUpdate, type ZaloUpdate } from "./zalo.types";
@@ -28,7 +33,10 @@ export class ZaloController {
     private readonly jobs: JobsService,
     private readonly media: MediaService,
     private readonly conversations: ConversationService,
-    private readonly zalo: ZaloClient
+    private readonly zalo: ZaloClient,
+    private readonly pipeline: PipelineService,
+    private readonly v7: V7Service,
+    private readonly auth: AuthService
   ) {}
 
   @Post("webhook")
@@ -79,6 +87,13 @@ export class ZaloController {
       return;
     }
 
+    // Mã ghép đôi Mini App — chặn TRƯỚC khi vào agent.
+    //
+    // Đặt ở đây vì hai lý do: (1) không tốn một lượt model cho một chuỗi 6 số,
+    // (2) danh tính phải đến từ webhook chứ không qua tay LLM. `msg.senderZaloId`
+    // là do Zalo khẳng định — đó là toàn bộ chỗ dựa của cơ chế liên kết.
+    if (await this.tryRedeemLinkCode(conv.id, msg)) return;
+
     // Sticker đơn thuần: trả lời rẻ tiền, không gọi model
     if (msg.eventName === "message.sticker.received" && !msg.text) {
       await this.zalo.sendRaw(msg.chatId, "😄");
@@ -93,6 +108,10 @@ export class ZaloController {
       );
       return;
     }
+
+    // Tin này có phải câu trả lời cho pipeline đang chạy không?
+    // (mã ghép đôi đã được xử lý ở trên)
+    if (await this.routeToPipeline(conv.id, msg)) return;
 
     /**
      * GỘP theo cửa sổ thời gian thay vì tạo job cho từng tin.
@@ -127,12 +146,188 @@ export class ZaloController {
     );
   }
 
+  /**
+   * Bắt mã ghép đôi Mini App trong tin nhắn. Trả true = đã xử lý, dừng ở đây.
+   *
+   * Khớp rất hẹp — chỉ tin CHỈ CÓ 6 chữ số, cho phép có tiền tố "@Zino" hoặc
+   * vài từ ngắn kiểu "ma 482913". Hẹp là cố ý: "6 người 3 triệu" hay "12/08"
+   * không được phép bị nuốt mất khỏi luồng hội thoại bình thường.
+   */
+  private async tryRedeemLinkCode(
+    conversationId: number,
+    msg: { chatId: string; text?: string | null; senderZaloId: string; senderName: string }
+  ): Promise<boolean> {
+    const text = msg.text?.trim();
+    if (!text || text.length > 32) return false;
+
+    const stripped = text
+      .replace(/^@\S+\s*/i, "") // bỏ "@Zino"
+      .replace(/^(m[ãa]|code|link)\s*:?\s*/i, "") // bỏ "mã:" / "code"
+      .trim();
+    if (!/^\d{6}$/.test(stripped)) return false;
+
+    const result = await this.auth.redeemCode(
+      stripped,
+      msg.senderZaloId,
+      msg.senderName,
+      conversationId
+    );
+
+    const reply = result.ok
+      ? `Đã liên kết xong rồi nhé ${msg.senderName} 🎉 Mở lại Mini App là thấy chuyến của mình.`
+      : `Mã này không dùng được: ${result.reason}. Mở Mini App lấy mã mới giúp mình nhé.`;
+
+    await this.zalo.sendRaw(msg.chatId, reply);
+    await this.conversations.recordOutbound(conversationId, reply);
+    this.log.log(
+      `link-code ${stripped} · ${msg.senderName} · ${result.ok ? "OK" : `FAIL: ${result.reason}`}`
+    );
+    return true;
+  }
+
+  /**
+   * Đẩy tin nhắn vào pipeline nếu nó rõ ràng là câu trả lời cho pipeline.
+   * Trả true nghĩa là đã xử lý xong, KHÔNG tạo agent_turn nữa.
+   *
+   * MẶC ĐỊNH LUÔN LÀ AgentService. Pipeline chỉ chen ngang khi tin nhắn khớp
+   * hẳn với thứ nó đang chờ. Lý do: trong lúc Đông lên plan Đà Lạt, Hà vẫn
+   * phải hỏi được "ai trả tiền cà phê hôm qua" — bắt cả nhóm chờ vì một người
+   * đang lên kế hoạch là hệ thống tệ.
+   *
+   * Trường hợp mập mờ ("4 đứa thôi, mà nhớ nhắc tao đặt vé nhé") cố tình rơi
+   * về AgentService: nó đã là bộ định tuyến LLM sẵn có, dùng lại rẻ hơn viết
+   * bộ phân loại thứ hai.
+   */
+  private async routeToPipeline(
+    conversationId: number,
+    msg: { chatId: string; text?: string | null; senderZaloId: string; senderName: string }
+  ): Promise<boolean> {
+    /**
+     * v7 §2.2 — "Every new user message enters through Intake", và §3.1 cấm
+     * backend tự phân loại ngữ nghĩa.
+     *
+     * Nên khi một flow v7 đang chạy, MỌI tin nhắn của hội thoại đó đi thẳng
+     * vào Intake, không qua AgentService, không qua bất kỳ heuristic nào ở
+     * đây. Backend chỉ kiểm một điều duy nhất: có flow đang mở hay không.
+     *
+     * Ngoài flow thì AgentService vẫn là cửa trước — đó là chỗ duy nhất lệch
+     * doc, và là cái giá để giữ 19 tool đang chạy (ghi chi phí, nhắc lịch,
+     * đọc bill từ ảnh, Partner Network).
+     */
+    if (v7Enabled()) {
+      const run = await this.v7.findActive(conversationId);
+      if (!run) return false;
+
+      const text = (msg.text ?? "").trim();
+      if (!text) return false; // ảnh/sticker đơn thuần → để AgentService lo
+
+      /**
+       * CỬA THOÁT CỨNG.
+       *
+       * Lệch §3.1 ("backend must not classify semantically") một cách có chủ
+       * đích, và đây KHÔNG phải phân loại ý định — nó khớp đúng một chuỗi cố
+       * định, giống hệt cách §2.5 khớp `BẮT ĐẦU RESEARCH`.
+       *
+       * Vì sao bắt buộc: `cancel_planning_flow` nằm trong tool list của
+       * AgentService, mà AgentService không bao giờ chạy khi flow đang mở —
+       * cửa thoát nằm sau đúng cánh cửa nó phải mở. Không có lối này thì một
+       * flow kẹt là nhóm mất luôn ghi chi phí, nhắc lịch, ảnh, Partner Network.
+       */
+      if (/^(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu.test(text)) {
+        await this.v7.abandon(run.id, "cancelled");
+        await this.zalo.sendRaw(
+          msg.chatId,
+          "Đã đóng luồng lên kế hoạch. Giờ mình quay lại bình thường nhé 👍"
+        );
+        this.log.log(`run#${run.id} bị đóng bằng cửa thoát cứng`);
+        return true;
+      }
+
+      await this.jobs.enqueue(
+        "v7_turn",
+        {
+          runId: run.id,
+          userMessage: text,
+          actorId: msg.senderZaloId,
+          actorName: msg.senderName
+        },
+        { dedupeKey: msg.chatId } // §3.3: không chạy hai lượt Brain song song
+      );
+      return true;
+    }
+
+    if (!pipelineEnabled()) return false;
+
+    const run = await this.pipeline.findActive(conversationId);
+    if (!run) return false;
+
+    const text = (msg.text ?? "").trim();
+    if (!text) return false;
+
+    // Chờ owner chọn phương án — CHỈ owner, và chỉ khi tin khớp hẳn một lựa chọn
+    if (run.status === "awaiting_selection") {
+      if (msg.senderZaloId !== run.ownerZaloId) return false;
+      const candidateId = parseCandidate(text);
+      if (!candidateId) return false;
+
+      await this.jobs.enqueue(
+        "pipeline_step",
+        { runId: run.id, stage: "D", candidateId, actorId: msg.senderZaloId },
+        { dedupeKey: msg.chatId }
+      );
+      this.log.log(`run#${run.id} owner chọn ${candidateId}`);
+      return true;
+    }
+
+    // Chờ trả lời câu hỏi của A — ai trong nhóm trả lời cũng được
+    if (run.status === "awaiting_user") {
+      await this.jobs.enqueue(
+        "pipeline_step",
+        {
+          runId: run.id,
+          stage: "A",
+          userMessage: text,
+          actorId: msg.senderZaloId,
+          actorName: msg.senderName
+        },
+        { dedupeKey: msg.chatId }
+      );
+      return true;
+    }
+
+    // Đang chạy stage nào đó → không chen ngang, để AgentService trả lời bình thường
+    return false;
+  }
+
   /** Tiện ích vận hành: xem bot đang nối webhook nào. */
   @Get("info")
   async info() {
     const [me, hook] = await Promise.all([this.zalo.getMe(), this.zalo.getWebhookInfo()]);
     return { me, webhook: hook };
   }
+}
+
+/**
+ * Bóc lựa chọn của owner từ tin nhắn.
+ *
+ * Zalo Bot API không có nút bấm (xem ràng buộc trong prompt.ts), nên C đánh số
+ * "1️⃣ 2️⃣ 3️⃣" và owner nhắn số. Chỉ nhận dạng CHẶT — "2" hoặc "chọn 2" thì được,
+ * còn "2 đứa nữa đi cùng nhé" thì không, để nó rơi về AgentService.
+ *
+ * Trả candidate_id chuẩn hoá, hoặc null nếu không phải một lựa chọn.
+ */
+export function parseCandidate(text: string): string | null {
+  const t = text.trim().toLowerCase();
+
+  // Dạng id đầy đủ: candidate_02 / cand_A
+  const explicit = t.match(/\b((?:candidate|cand)[_-]?[a-z0-9]+)\b/);
+  if (explicit) return explicit[1];
+
+  // Chỉ mỗi con số, hoặc số kèm động từ chọn. Emoji keycap 1️⃣ cũng tính.
+  const num = t
+    .replace(/[\u{FE0F}\u{20E3}]/gu, "")
+    .match(/^(?:chọn|chon|lấy|lay|đi|di|ok)?\s*([1-9])\s*(?:nhé|nha|nhe|đi|di|!|\.)?$/u);
+  return num ? `candidate_${num[1].padStart(2, "0")}` : null;
 }
 
 function verifySecret(received?: string): boolean {

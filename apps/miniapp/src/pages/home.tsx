@@ -4,11 +4,13 @@ import {
   CalendarDays,
   ExternalLink,
   Images,
+  Link2,
   Luggage,
   Sparkles,
   Wallet
 } from "lucide-react";
 import { api, recapPageUrl, type Activity } from "../lib/api";
+import { session, type MeResponse } from "../lib/session";
 import { fetchZaloUser, openExternal, type ZaloUser } from "../lib/zalo";
 import { useRecap } from "../lib/use-trip";
 import { countdownLabel, STATUS_LABEL } from "../components/trip-header";
@@ -31,9 +33,13 @@ export default function HomePage() {
   const [user, setUser] = useState<ZaloUser | null>(null);
   const { data, loading, error, isEmpty, reload } = useRecap();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [me, setMe] = useState<MeResponse | null>(null);
 
   useEffect(() => {
     void fetchZaloUser().then(setUser);
+    // Phiên là tính năng CỘNG THÊM: không lấy được thì `me` cứ null và mọi thứ
+    // chạy y như trước. Không được để đăng nhập biến thành cửa ải chặn đường.
+    void session.me().then(setMe);
   }, []);
 
   // Nhật ký "Zino đã làm gì" nằm ở /full chứ không có trong recap — tải rời và
@@ -52,13 +58,50 @@ export default function HomePage() {
     };
   }, [data]);
 
+  /**
+   * Nhắc liên kết — hiện với MỌI trường hợp chưa nối, kể cả khi chưa lấy được
+   * phiên (`me === null`).
+   *
+   * Bản đầu chỉ hiện khi đã có phiên, với lý do "đừng nhắc việc user không làm
+   * được". Sai: lúc đó "chưa deploy bản mới" và "phiên hỏng" trông y hệt nhau —
+   * không ai, kể cả team, phân biệt nổi. Giờ luôn có lối vào, còn /link chịu
+   * trách nhiệm nói rõ hỏng ở đâu.
+   */
+  const linkBanner =
+    !me?.linked ? (
+      <Link
+        to="/link"
+        className="flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3.5 py-3 text-sm"
+      >
+        <Link2 size={16} className="shrink-0 text-accent-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="font-medium">Liên kết tài khoản</span>
+          <span className="block text-xs text-muted-foreground">
+            Để Zino biết bạn là ai trong nhóm — mất 10 giây
+          </span>
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-primary">Liên kết →</span>
+      </Link>
+    ) : null;
+
   const greeting = (
-    <header className="rounded-lg bg-primary p-5 text-primary-foreground">
-      <p className="text-sm/relaxed opacity-80">Xin chào{user ? `, ${user.name}` : ""} 👋</p>
+    <header className="relative rounded-lg bg-primary p-5 text-primary-foreground">
+      <p className="text-sm/relaxed opacity-80">
+        Xin chào{me?.member?.displayName ? `, ${me.member.displayName}` : user ? `, ${user.name}` : ""} 👋
+      </p>
       <h1 className="mt-1 text-xl font-bold">Zino – Trợ lý nhu cầu của nhóm</h1>
       <p className="mt-2 flex items-center gap-1.5 text-sm opacity-90">
         <Sparkles size={16} /> Nhắn “@Zino” trong nhóm Zalo để lên kế hoạch
       </p>
+      {/* TẠM — lối vào màn đo danh tính. Đặt trong header vì header hiện ở MỌI
+          nhánh của Home (đang tải / lỗi / rỗng), còn trong webview Zalo thì
+          không gõ URL tay được. Xoá cùng /debug sau khi đo xong. */}
+      <Link
+        to="/debug"
+        className="absolute right-3 top-3 rounded-full bg-white/15 px-2 py-1 text-[11px] font-medium"
+      >
+        🔧 debug
+      </Link>
     </header>
   );
 
@@ -66,6 +109,7 @@ export default function HomePage() {
     return (
       <div className="space-y-4">
         {greeting}
+        {linkBanner}
         <SkeletonList rows={2} />
       </div>
     );
@@ -75,6 +119,7 @@ export default function HomePage() {
     return (
       <div className="space-y-4">
         {greeting}
+        {linkBanner}
         <ErrorState message={error} onRetry={reload} />
       </div>
     );
@@ -84,6 +129,7 @@ export default function HomePage() {
     return (
       <div className="space-y-4">
         {greeting}
+        {linkBanner}
         <EmptyState
           icon={<Luggage size={32} />}
           title="Chưa có chuyến đi nào"
@@ -104,6 +150,7 @@ export default function HomePage() {
   return (
     <div className="space-y-4">
       {greeting}
+      {linkBanner}
 
       {/* Thẻ chuyến đi — đếm ngược + số liệu tóm tắt */}
       <Card className="overflow-hidden">

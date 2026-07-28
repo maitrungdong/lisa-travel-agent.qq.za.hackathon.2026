@@ -371,3 +371,144 @@ export const oaLeads = pgTable(
     uniqueIndex("oa_leads_partner_user_uq").on(t.partnerOaId, t.oaUserId)
   ]
 );
+
+/* ============================================================================
+ * PIPELINE LÊN KẾ HOẠCH — 4 agent chạy tuần tự A → B → C → [chờ owner] → D
+ *
+ * Vì sao cần bảng riêng thay vì biến trong bộ nhớ: pipeline có HAI điểm dừng
+ * đồng bộ với con người (A hỏi lại; C xong chờ owner chọn). Một run có thể
+ * sống hàng giờ, qua nhiều tin nhắn, qua cả lần restart container.
+ * ========================================================================== */
+
+/**
+ * Trạng thái của run — cũng chính là bộ định tuyến của webhook.
+ *
+ *   running_a/b/c/d   đang gọi agent, tin nhắn tới đi về AgentService như thường
+ *   awaiting_user     A đã hỏi, đang chờ ai đó trong nhóm trả lời
+ *   awaiting_selection C đã ra phương án, chờ ĐÚNG owner chọn
+ *   done | blocked | failed | expired | cancelled   kết thúc, không chặn run mới
+ */
+export const pipelineRuns = pgTable(
+  "pipeline_runs",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: bigint("conversation_id", { mode: "number" })
+      .notNull()
+      .references(() => conversations.id),
+    zaloChatId: varchar("zalo_chat_id", { length: 64 }).notNull(),
+
+    /** Người gọi start_trip_planning. Chỉ người này được chọn variant. */
+    ownerZaloId: varchar("owner_zalo_id", { length: 64 }).notNull(),
+    ownerName: text("owner_name"),
+
+    /** A | B | C | D — stage vừa chạy hoặc đang chạy */
+    stage: varchar("stage", { length: 1 }),
+    status: varchar("status", { length: 24 }).notNull().default("running_a"),
+
+    /**
+     * Sợi chỉ xuyên suốt 4 lượt LLM. Khi C ra phương án lạ, đây là cách lần
+     * ngược về đúng A và B đã sinh ra nó.
+     */
+    traceId: varchar("trace_id", { length: 36 }).notNull(),
+
+    /** { "A": "sess_...", "B": "sess_..." } — session Managed Agents theo stage */
+    agentSessions: jsonb("agent_sessions").notNull().default({}),
+
+    /** Nguyên output từng stage, không bóc field (theo contract backend.md) */
+    alignmentResult: jsonb("alignment_result"),
+    sourcingResult: jsonb("sourcing_result"),
+    planningResult: jsonb("planning_result"),
+    packageResult: jsonb("package_result"),
+
+    /**
+     * Vá lỗ hổng vòng B → A: câu hỏi do B đặt ra nhưng user trả lời cho A.
+     * Không có field này thì A nhận câu trả lời mà không biết câu hỏi là gì.
+     */
+    pendingQuestion: jsonb("pending_question"),
+
+    /**
+     * v7 — "thin state": CHỈ giữ thứ cần để hiểu tin nhắn KẾ TIẾP.
+     *
+     * Agent trả `state_patch` từng phần, backend deep-merge vào đây (v7 §3.4).
+     * Không chứa transcript, không chain-of-thought, không PII (§5).
+     */
+    thinState: jsonb("thin_state").notNull().default({}),
+
+    /**
+     * v7 — hợp đồng trả lời do Finalizer sinh ra. Đây là thứ giúp Intake hiểu
+     * "chọn 2" ở lượt sau ứng với option nào, thay vì đoán theo thứ tự transcript.
+     */
+    replyContract: jsonb("reply_contract"),
+
+    /** needs_source_data chỉ được retry B đúng 1 lần (theo backend.md) */
+    scoutRetries: integer("scout_retries").notNull().default(0),
+
+    selectedCandidateId: varchar("selected_candidate_id", { length: 64 }),
+
+    /** Run bị bỏ quên → worker dọn, để nhóm mở được run mới */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [index("pipeline_runs_conv_idx").on(t.conversationId, t.status)]
+);
+
+/* ==========================================================================
+ * Danh tính Mini App ↔ thành viên nhóm.
+ *
+ * Bot API và Mini App nhìn cùng một con người dưới hai id khác namespace, và
+ * Zalo không có API nối. Ba bảng dưới đây là cây cầu: app_users (ai đang mở
+ * app) → link_codes (mã 6 số dùng một lần) → person_links (kết quả nối).
+ * ========================================================================== */
+
+/** Người dùng nhìn từ phía Mini App. id do SERVER lấy từ graph.zalo.me, không tin client. */
+export const appUsers = pgTable(
+  "app_users",
+  {
+    id: serial("id").primaryKey(),
+    zaloAppUserId: varchar("zalo_app_user_id", { length: 64 }).notNull(),
+    displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [uniqueIndex("app_users_zalo_uq").on(t.zaloAppUserId)]
+);
+
+/** Mã ghép đôi. Gõ công khai trong nhóm nên hạn ngắn và chỉ dùng được một lần. */
+export const linkCodes = pgTable(
+  "link_codes",
+  {
+    id: serial("id").primaryKey(),
+    code: varchar("code", { length: 8 }).notNull(),
+    appUserId: bigint("app_user_id", { mode: "number" })
+      .notNull()
+      .references(() => appUsers.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [index("link_codes_user_idx").on(t.appUserId, t.createdAt)]
+);
+
+/** Kết quả nối. Unique hai chiều để hai người không cùng nhận là một thành viên. */
+export const personLinks = pgTable(
+  "person_links",
+  {
+    id: serial("id").primaryKey(),
+    appUserId: bigint("app_user_id", { mode: "number" })
+      .notNull()
+      .references(() => appUsers.id),
+    /** `from.id` phía Bot API — khớp với members.zaloUserId */
+    zaloBotUserId: varchar("zalo_bot_user_id", { length: 64 }).notNull(),
+    displayName: text("display_name"),
+    /** code | context | manual — để sau này thêm đường tắt getContextAsync */
+    linkedVia: varchar("linked_via", { length: 16 }).notNull().default("code"),
+    conversationId: bigint("conversation_id", { mode: "number" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [
+    uniqueIndex("person_links_app_uq").on(t.appUserId),
+    uniqueIndex("person_links_bot_uq").on(t.zaloBotUserId)
+  ]
+);

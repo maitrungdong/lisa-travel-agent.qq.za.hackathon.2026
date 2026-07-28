@@ -7,6 +7,9 @@ import { DB, type Database } from "../db/database.module";
 import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
 import { MerchantAgentService } from "../oa/merchant-agent.service";
+import { PipelineService, type StepJob } from "../pipeline/pipeline.service";
+import { V7Service, type V7TurnJob } from "../pipeline/v7.service";
+import { v7Enabled } from "../pipeline/v7.types";
 import { renderRecapHtml, type RecapPayload } from "../trips/recap";
 import { TripsService } from "../trips/trips.service";
 import { ConversationService } from "../zalo/conversation.service";
@@ -37,7 +40,9 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly conversations: ConversationService,
     private readonly media: MediaService,
     private readonly merchant: MerchantAgentService,
-    private readonly trips: TripsService
+    private readonly trips: TripsService,
+    private readonly pipeline: PipelineService,
+    private readonly v7: V7Service
   ) {}
 
   onApplicationBootstrap(): void {
@@ -61,6 +66,7 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       let didWork = false;
       try {
         await this.fireDueReminders();
+        await this.sweepStaleRuns();
         const job = await this.jobs.claim();
         if (job) {
           didWork = true;
@@ -93,6 +99,18 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
           // Partner Network: trả lời lead thay OA đối tác rồi đẩy về nhóm Zino
           await this.merchant.handleLead(job.payload.leadId as number);
           break;
+        case "v7_turn":
+          // Job cũ còn trong hàng đợi sau khi tắt cờ → bỏ, đừng chạy nữa
+          if (!v7Enabled()) {
+            this.log.warn(`Bỏ job#${job.id} v7_turn: ZINO_V7_ENABLED=0`);
+            break;
+          }
+          await this.v7.turn(job.payload as unknown as V7TurnJob);
+          break;
+        case "pipeline_step":
+          // Một stage của pipeline 4 agent; stage này xong sẽ tự đẩy stage kế
+          await this.pipeline.step(job.payload as unknown as StepJob);
+          break;
         default:
           this.log.warn(`Job kind lạ: ${job.kind}`);
       }
@@ -101,8 +119,18 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     } catch (err) {
       await this.jobs.fail(job, err);
       // Báo user khi lượt hội thoại hỏng hẳn — im lặng là tệ nhất
-      if (job.kind === "agent_turn" && job.attempts >= 3) {
-        const chatId = job.payload.zaloChatId as string;
+      if (job.attempts >= 3 && (job.kind === "agent_turn" || job.kind === "v7_turn")) {
+        /**
+         * Với v7 phải ĐÓNG RUN trước khi báo.
+         *
+         * Run kẹt ở trạng thái non-terminal khiến webhook tiếp tục route mọi
+         * tin nhắn vào v7, lại fail, lại im — nhóm mất luôn 19 tool của
+         * AgentService. Một lượt hỏng thì chỉ được mất một lượt.
+         */
+        let chatId = job.payload.zaloChatId as string | undefined;
+        if (job.kind === "v7_turn") {
+          chatId = (await this.v7.abandon(job.payload.runId as number)) ?? chatId;
+        }
         if (chatId) {
           await this.zalo.sendRaw(
             chatId,
@@ -111,6 +139,20 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
         }
       }
     }
+  }
+
+  /**
+   * Dọn run pipeline bị bỏ quên (owner không bao giờ chọn phương án).
+   *
+   * Không có bước này thì unique index `một hội thoại một run active` sẽ khoá
+   * nhóm đó vĩnh viễn — không ai lên kế hoạch mới được nữa.
+   * Chạy 5 phút một lần là đủ; TTL mặc định 24h.
+   */
+  private lastSweepAt = 0;
+  private async sweepStaleRuns(): Promise<void> {
+    if (Date.now() - this.lastSweepAt < 5 * 60 * 1000) return;
+    this.lastSweepAt = Date.now();
+    await this.pipeline.expireStale();
   }
 
   /* ---------------------------------------------------------------- */

@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 import { groupMemory } from "../../db/schema";
+import { pipelineEnabled } from "../../pipeline/pipeline.types";
+import { v7Enabled } from "../../pipeline/v7.types";
 import { moneyTools } from "./money.tools";
 import { partnerTools } from "./partner.tools";
+import { planningTools } from "./planning.tools";
+import { v7Tools } from "./v7.tools";
 import { tripTools } from "./trip.tools";
 import { S, schema, type ToolDef } from "./types";
 
@@ -169,15 +173,40 @@ const replyTools: ToolDef[] = [
   }
 ];
 
-/** Toàn bộ tool Zino dùng được. */
-export const allTools: ToolDef[] = [
-  ...tripTools,
-  ...moneyTools,
-  ...partnerTools,
-  ...memoryTools,
-  ...asyncTools,
-  ...replyTools
-];
+/**
+ * Toàn bộ tool Zino dùng được.
+ *
+ * Pipeline 4 agent nằm sau cờ ZINO_PIPELINE_ENABLED. Tắt cờ = hệ thống chạy y
+ * hệt trước khi có pipeline — đây là đường lui trong 5 giây nếu Managed Agents
+ * trục trặc đúng hôm demo.
+ *
+ * ⚠ Khi BẬT pipeline thì phải BỎ `request_deep_plan`: nó làm gần đúng việc của
+ * pipeline (đẩy job deep_plan dựng lịch trình), để cả hai thì model có hai
+ * đường lên kế hoạch và sẽ chọn ngẫu nhiên.
+ */
+export const allTools: ToolDef[] = v7Enabled()
+  ? [
+      // v7: ba agent Intake/Brain/Finalizer. Gỡ request_deep_plan vì Brain
+      // làm đúng việc đó, để cả hai thì model chọn ngẫu nhiên.
+      ...tripTools,
+      ...moneyTools,
+      ...partnerTools,
+      ...memoryTools,
+      ...asyncTools.filter((t) => t.name !== "request_deep_plan"),
+      ...v7Tools,
+      ...replyTools
+    ]
+  : pipelineEnabled()
+  ? [
+      ...tripTools,
+      ...moneyTools,
+      ...partnerTools,
+      ...memoryTools,
+      ...asyncTools.filter((t) => t.name !== "request_deep_plan"),
+      ...planningTools,
+      ...replyTools
+    ]
+  : [...tripTools, ...moneyTools, ...partnerTools, ...memoryTools, ...asyncTools, ...replyTools];
 
 export const toolMap = new Map(allTools.map((t) => [t.name, t]));
 

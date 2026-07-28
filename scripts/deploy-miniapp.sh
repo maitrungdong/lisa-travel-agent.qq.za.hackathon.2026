@@ -135,35 +135,22 @@ APP_ID="$(grep '^APP_ID=' .env | tail -1 | cut -d= -f2-)"
 APP_URL="https://zalo.me/s/${APP_ID}/"
 
 printf '\n%s✅ Deploy xong%s\n' "$C_GRN" "$C_OFF"
-printf '   App   : %s\n' "$APP_URL"
 printf '   API   : %s\n' "$API_BASE"
 printf '   Ghi chú: %s\n' "$DESC"
 
-# QR ngay trong terminal — quét bằng camera điện thoại là mở app, khỏi gõ URL.
+# ---------------------------------------------------------------------------
+# KHÔNG tự vẽ QR ở đây nữa.
 #
-# Thông tin quan trọng (URL app, API) đã in Ở TRÊN rồi. QR chỉ là tiện thêm, nên
-# nó không bao giờ được phép chặn hay làm hỏng deploy: có timeout, nuốt lỗi,
-# và luôn có URL dạng chữ để dùng thay.
-printf '\n%s   Quét QR bằng điện thoại:%s\n\n' "$C_CYN" "$C_OFF"
-
-qr_bin=""
-if [ -x "$ROOT/node_modules/.bin/qrcode-terminal" ]; then
-  qr_bin="$ROOT/node_modules/.bin/qrcode-terminal"     # đã cài sẵn → nhanh, offline
-fi
-
-run_qr() {
-  if [ -n "$qr_bin" ]; then
-    "$qr_bin" "$APP_URL"
-  # npx phải tải gói lần đầu; giới hạn 25s để mạng chậm không treo terminal
-  elif command -v timeout >/dev/null 2>&1; then
-    timeout 25 npx --yes qrcode-terminal@0.12.0 "$APP_URL"
-  elif command -v gtimeout >/dev/null 2>&1; then        # coreutils trên macOS
-    gtimeout 25 npx --yes qrcode-terminal@0.12.0 "$APP_URL"
-  else
-    npx --yes qrcode-terminal@0.12.0 "$APP_URL"
-  fi
-}
-
-run_qr 2>/dev/null || printf '   (bỏ qua QR — mở thẳng: %s)\n' "$APP_URL"
-
-printf '\n   openChat chỉ chạy trong app Zalo thật — test màn Handoff bằng ĐIỆN THOẠI.\n\n'
+# Bản cũ vẽ QR từ https://zalo.me/s/<APP_ID>/ — đó là entry point của bản ĐÃ
+# PHÁT HÀNH. Quét nó khi mới deploy bản development/testing thì Zalo báo
+# "Ứng dụng trong giai đoạn phát triển, thử lại sau", và người quét sẽ tưởng
+# deploy hỏng.
+#
+# `zmp deploy` đã in sẵn QR entry point ĐÚNG ở ngay trên (mục "View app at:").
+# Vẽ thêm một QR thứ hai chỉ tạo ra hai mã cạnh nhau, một đúng một sai — kiểu
+# nhầm lẫn tệ nhất có thể bày ra giữa lúc demo.
+# ---------------------------------------------------------------------------
+printf '\n%s   Quét QR ở mục "View app at:" phía trên%s — đó là entry point Zalo trả về.\n' "$C_CYN" "$C_OFF"
+printf '   (Link %s chỉ dùng được sau khi bản chính thức được phát hành.)\n' "$APP_URL"
+printf '\n   Bản testing còn nằm ở mini.zalo.me/developers → Quản lý phiên bản, lấy QR lại được.\n'
+printf '   openChat chỉ chạy trong app Zalo thật — test màn Handoff bằng ĐIỆN THOẠI.\n\n'

@@ -1,10 +1,12 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/bottom-nav";
+import DebugPage from "./pages/debug";
 import ExpensesPage from "./pages/expenses";
 import GalleryPage from "./pages/gallery";
 import HandoffPage from "./pages/handoff";
 import HomePage from "./pages/home";
 import ItineraryPage from "./pages/itinerary";
+import LinkPage from "./pages/link";
 import PartnersPage from "./pages/partners";
 
 // HashRouter: bundle chạy dưới sub-path CDN của Zalo, không kiểm soát được
@@ -21,6 +23,10 @@ export default function App() {
           <Route path="/partners" element={<PartnersPage />} />
           {/* Concierge Handoff — Zino soạn tin, user bấm gửi sang OA đối tác */}
           <Route path="/handoff" element={<HandoffPage />} />
+          {/* Liên kết tài khoản Zalo với thành viên nhóm — chỉ gặp một lần */}
+          <Route path="/link" element={<LinkPage />} />
+          {/* TẠM — đo namespace id giữa Bot API và Mini App. Xoá sau khi đo xong. */}
+          <Route path="/debug" element={<DebugPage />} />
         </Routes>
       </main>
       <BottomNav />
