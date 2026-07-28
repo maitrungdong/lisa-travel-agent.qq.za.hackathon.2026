@@ -16,9 +16,17 @@ pnpm db:push                      # tạo schema từ apps/api/src/db/schema.ts
 cp apps/api/.env.example apps/api/.env
 pnpm dev:api                      # http://localhost:3000/health
 
+# Dữ liệu mẫu để test giao diện (1 chuyến đủ lịch trình/chi phí/ảnh/ghi chú)
+pnpm seed:demo
+pnpm seed:partners                # danh bạ OA đối tác
+
 # Mini app (chạy trình duyệt thường được — zmp-sdk tự fallback ngoài Zalo)
+echo 'VITE_API_BASE_URL=http://localhost:3000' > apps/miniapp/.env.local
 pnpm dev:miniapp                  # http://localhost:5173
 ```
+
+`pnpm seed:demo` chạy lại được nhiều lần — nó xoá chuyến demo cũ rồi tạo lại,
+và neo ngày vào **hôm nay** để đếm ngược / tab ngày luôn có ngày chưa qua.
 
 ## Kiểm tra như CI
 

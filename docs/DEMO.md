@@ -95,7 +95,15 @@ Bảng ai chuyển cho ai, **số giao dịch tối thiểu**.
 
 ~60 giây sau Zino gửi link `zah-35.123c.vn/trip/<id>/` — trang web có timeline, gallery, bảng chi tiêu.
 
-**Trạng thái:** ❓ chưa test.
+**Chứng minh:** bố cục và mọi con số do code dựng (`apps/api/src/trips/recap.ts`, 16 unit test),
+LLM chỉ viết đoạn lời tựa. Nên số trên trang này **khớp từng đồng** với màn Chi phí của Mini App —
+không có chuyện hai nơi hai số.
+
+**Trạng thái:** ✅ renderer có test · ❓ chưa test end-to-end qua job.
+
+**Nếu job recap hỏng giữa demo:** mở thẳng `https://zah-35.123c.vn/api/trips/<id>/recap.html` —
+API tự dựng trang tại chỗ, không cần worker chạy trước. Mini App cũng có nút
+"Mở trang tổng kết chuyến đi" ở Trang chủ.
 
 ### 4:45 — Partner Network
 
