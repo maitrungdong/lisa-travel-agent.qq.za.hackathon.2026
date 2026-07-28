@@ -382,3 +382,46 @@ CREATE TABLE IF NOT EXISTS decision_votes (
 -- Một người một phiếu cho mỗi quyết định; đổi ý thì UPDATE chứ không thêm dòng.
 CREATE UNIQUE INDEX IF NOT EXISTS decision_votes_one_per_person_uq
   ON decision_votes (decision_id, zalo_user_id);
+
+-- ============================================================================
+-- J3/J4 — Trạng thái thực thi và quyền sửa dữ liệu.
+--
+-- Nguyên tắc hiện trên UI: SỬA ĐƯỢC DỮ LIỆU, KHÔNG SỬA ĐƯỢC GIAO DỊCH.
+-- Khoản chi do Zino tạo kèm mã giao dịch là bản ghi của một việc đã xảy ra
+-- ngoài đời — cho sửa số tiền là biến sổ sách thành chuyện kể lại.
+-- ============================================================================
+
+-- Mục lịch trình có 3 trạng thái. Lỗi PHẢI hiện, kèm lý do và đường xử lý —
+-- giấu lỗi đi thì người dùng đứng ở bến xe mới biết mình không có vé.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS status      varchar(16) NOT NULL DEFAULT 'done';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS fail_reason text;
+/** zino | user — quyết định ai được sửa */
+ALTER TABLE events ADD COLUMN IF NOT EXISTS source      varchar(16) NOT NULL DEFAULT 'user';
+/** Mã giữ chỗ / booking bên đối tác (hackathon: mock) */
+ALTER TABLE events ADD COLUMN IF NOT EXISTS booking_ref varchar(64);
+ALTER TABLE events ADD COLUMN IF NOT EXISTS partner_oa_id varchar(64);
+
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source   varchar(16) NOT NULL DEFAULT 'user';
+/** Có mã giao dịch = tiền đã chuyển thật → khoá số tiền và người trả */
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS txn_code varchar(64);
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note     text;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_by varchar(64);
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_by varchar(64);
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+
+-- Tick "đã trả" của một cặp chuyển tiền.
+--
+-- Vì sao phải LƯU: settlement được tính lại mỗi lần mở (từ expenses), nhưng
+-- việc "Linh đã chuyển cho Đông" là sự kiện ngoài đời, không suy ra được từ
+-- bất kỳ phép tính nào. Không lưu thì tick xong mở lại là mất.
+CREATE TABLE IF NOT EXISTS settlement_payments (
+  id           serial PRIMARY KEY,
+  trip_id      bigint      NOT NULL REFERENCES trips(id),
+  from_user_id varchar(64) NOT NULL,
+  to_user_id   varchar(64) NOT NULL,
+  amount       bigint      NOT NULL,
+  ticked_by    varchar(64),
+  ticked_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS settlement_payments_pair_uq
+  ON settlement_payments (trip_id, from_user_id, to_user_id);

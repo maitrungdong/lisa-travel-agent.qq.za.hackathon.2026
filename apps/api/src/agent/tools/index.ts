@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { groupMemory } from "../../db/schema";
 import { pipelineEnabled } from "../../pipeline/pipeline.types";
 import { v7Enabled } from "../../pipeline/v7.types";
+import { decisionTools } from "./decision.tools";
 import { moneyTools } from "./money.tools";
 import { partnerTools } from "./partner.tools";
 import { planningTools } from "./planning.tools";
@@ -191,6 +192,7 @@ export const allTools: ToolDef[] = v7Enabled()
       ...tripTools,
       ...moneyTools,
       ...partnerTools,
+      ...decisionTools,
       ...memoryTools,
       ...asyncTools.filter((t) => t.name !== "request_deep_plan"),
       ...v7Tools,
@@ -201,12 +203,13 @@ export const allTools: ToolDef[] = v7Enabled()
       ...tripTools,
       ...moneyTools,
       ...partnerTools,
+      ...decisionTools,
       ...memoryTools,
       ...asyncTools.filter((t) => t.name !== "request_deep_plan"),
       ...planningTools,
       ...replyTools
     ]
-  : [...tripTools, ...moneyTools, ...partnerTools, ...memoryTools, ...asyncTools, ...replyTools];
+  : [...tripTools, ...moneyTools, ...partnerTools, ...decisionTools, ...memoryTools, ...asyncTools, ...replyTools];
 
 export const toolMap = new Map(allTools.map((t) => [t.name, t]));
 

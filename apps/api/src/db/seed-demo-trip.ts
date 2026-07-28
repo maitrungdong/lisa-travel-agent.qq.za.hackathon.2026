@@ -2,7 +2,18 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
 import { Pool } from "pg";
-import { activities, events, expenses, members, notes, photos, trips } from "./schema";
+import {
+  activities,
+  decisionOptions,
+  decisionVotes,
+  decisions,
+  events,
+  expenses,
+  members,
+  notes,
+  photos,
+  trips
+} from "./schema";
 
 /**
  * Seed một chuyến đi hoàn chỉnh để test giao diện.
@@ -37,6 +48,13 @@ async function main() {
   // Dọn chuyến cũ trước — chạy seed 3 lần không đẻ ra 3 chuyến trùng tên
   const old = await db.select().from(trips).where(eq(trips.name, TRIP_NAME));
   for (const t of old) {
+    // Xoá theo đúng thứ tự khoá ngoại: votes → options → decisions
+    const oldDecisions = await db.select({ id: decisions.id }).from(decisions).where(eq(decisions.tripId, t.id));
+    for (const d of oldDecisions) {
+      await db.delete(decisionVotes).where(eq(decisionVotes.decisionId, d.id));
+      await db.delete(decisionOptions).where(eq(decisionOptions.decisionId, d.id));
+    }
+    await db.delete(decisions).where(eq(decisions.tripId, t.id));
     await db.delete(activities).where(eq(activities.tripId, t.id));
     await db.delete(photos).where(eq(photos.tripId, t.id));
     await db.delete(notes).where(eq(notes.tripId, t.id));
@@ -59,8 +77,10 @@ async function main() {
     })
     .returning();
 
+  // Đông là người tổ chức — không có ai giữ vai này thì nút "Chốt phương án"
+  // không hiện với bất kỳ ai và cả luồng J2 tắc ngay từ bước đầu.
   await db.insert(members).values([
-    { tripId: trip.id, zaloUserId: "u1", displayName: "Đông" },
+    { tripId: trip.id, zaloUserId: "u1", displayName: "Đông", role: "organizer" },
     { tripId: trip.id, zaloUserId: "u2", displayName: "Đạt" },
     { tripId: trip.id, zaloUserId: "u3", displayName: "Linh" }
   ]);
@@ -82,7 +102,11 @@ async function main() {
       location: "Khách sạn Malibu, Bãi Sau",
       kind: "stay",
       note: "3 phòng đôi, có ăn sáng",
-      estimatedCost: 3_600_000
+      estimatedCost: 3_600_000,
+      status: "pending",
+      source: "zino",
+      bookingRef: "HOLD-4417",
+      partnerOaId: "themalibuhotel"
     },
     {
       tripId: trip.id,
@@ -123,6 +147,19 @@ async function main() {
     },
     {
       tripId: trip.id,
+      title: "Xe limousine chiều về",
+      startsAt: ict(2, "13:00"),
+      location: null,
+      kind: "transport",
+      note: null,
+      estimatedCost: null,
+      // Mục lỗi — wireframe bắt buộc hiện, kèm lý do và đường xử lý
+      status: "failed",
+      source: "zino",
+      failReason: "Hết chỗ khung giờ này"
+    },
+    {
+      tripId: trip.id,
       title: "Trả phòng, về Sài Gòn",
       startsAt: ict(2, "12:00"),
       location: null,
@@ -149,7 +186,10 @@ async function main() {
       category: "stay",
       paidBy: "u1",
       paidByName: "Đông",
-      spentAt: ict(0, "14:30")
+      spentAt: ict(0, "14:30"),
+      // Zino tạo + có mã giao dịch → khoá số tiền và người trả trên UI
+      source: "zino",
+      txnCode: "ZP-8842"
     },
     {
       tripId: trip.id,
@@ -232,7 +272,56 @@ async function main() {
     { tripId: trip.id, kind: "reminder", content: "Nhắc trả phòng trước 12h trưa ngày cuối" }
   ]);
 
+  /* ---------------------------------------------------------------------- *
+   * J2 — một quyết định ĐANG CHỜ CHỐT, đã có 2/3 phiếu.
+   *
+   * Cố tình để Đông (người tổ chức) chưa bầu: thẻ phải hiện "Còn Đông chưa
+   * bình chọn", và sheet xác nhận phải cảnh báo điều đó khi bấm Chốt. Đây
+   * chính là tình huống wireframe mô tả, không phải trạng thái đẹp đẽ.
+   * ---------------------------------------------------------------------- */
+  const [decision] = await db
+    .insert(decisions)
+    .values({
+      tripId: trip.id,
+      kind: "stay",
+      title: "Chọn khách sạn",
+      recommendationReason: "trong ngân sách, cách Bãi Sau 400m, huỷ được trước 12h"
+    })
+    .returning();
+
+  const opts = await db
+    .insert(decisionOptions)
+    .values([
+      {
+        decisionId: decision.id,
+        label: "Khách sạn Malibu",
+        detail: "cách Bãi Sau 400m",
+        price: 3_600_000,
+        partnerOaId: "themalibuhotel",
+        sortOrder: 0
+      },
+      {
+        decisionId: decision.id,
+        label: "Seaside Hotel",
+        detail: "ngay mặt biển",
+        price: 4_100_000,
+        sortOrder: 1
+      }
+    ])
+    .returning();
+
+  await db
+    .update(decisions)
+    .set({ recommendedOptionId: opts[0].id })
+    .where(eq(decisions.id, decision.id));
+
+  await db.insert(decisionVotes).values([
+    { decisionId: decision.id, optionId: opts[0].id, zaloUserId: "u2", displayName: "Đạt" },
+    { decisionId: decision.id, optionId: opts[0].id, zaloUserId: "u3", displayName: "Linh" }
+  ]);
+
   console.log(`✅ Đã seed chuyến demo id=${trip.id}`);
+  console.log(`   Quyết định đang chờ chốt: #${decision.id} "Chọn khách sạn" (2/3 phiếu)`);
   console.log(`   Mini App:      http://localhost:5173/#/?trip=${trip.id}`);
   console.log(`   Trang tổng kết: http://localhost:3000/trips/${trip.id}/recap.html`);
   await pool.end();

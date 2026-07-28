@@ -62,6 +62,36 @@ export class ZaloClient {
   }
 
   /**
+   * Gửi tin có ĐỊNH DẠNG THẬT — đậm, màu, danh sách — bằng `parse_mode`.
+   *
+   * Bot API mới hỗ trợ `parse_mode: markdown|html` và `text_styles`
+   * (docs.zaloplatforms.com/docs/BOT/apis/sendMessage). `render.ts` được viết
+   * từ thời "Zalo chỉ nhận plain text" nên đang dịch markdown sang ký tự
+   * Unicode — cách đó vẫn chạy, nhưng giờ có đường chính thống đẹp hơn.
+   *
+   * Vẫn KHÔNG có nút bấm: toàn bộ API của Bot chỉ có sendMessage / sendPhoto /
+   * sendSticker / sendChatAction / sendVoice. Trang giới thiệu có nhắc
+   * "carousel, quick reply" nhưng không endpoint nào đứng sau. Nên "card" của
+   * Zino = text định dạng đẹp + một link mở Mini App.
+   *
+   * Rơi về plain text khi Zalo từ chối: định dạng hỏng thì mất đẹp, còn không
+   * gửi được tin thì mất cả nội dung.
+   */
+  async sendRich(chatId: string, markdown: string): Promise<boolean> {
+    const text = markdown.slice(0, 2000);
+    const ok = await this.call("sendMessage", {
+      chat_id: chatId,
+      text,
+      parse_mode: "markdown"
+    });
+    if (ok !== null) return true;
+
+    this.log.warn("parse_mode markdown bị từ chối — gửi lại dạng plain text");
+    await this.sendMarkdown(chatId, markdown);
+    return false;
+  }
+
+  /**
    * Gửi nội dung markdown: tự render sang plain text, tự cắt ≤2000, gửi tuần tự.
    * Trả về số tin đã gửi.
    */

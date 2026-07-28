@@ -11,6 +11,7 @@ import {
   notes,
   partnerOas,
   photos,
+  settlementPayments,
   trips
 } from "../db/schema";
 import { buildRecap, renderRecapHtml, type RecapPayload } from "./recap";
@@ -126,6 +127,20 @@ export class TripsService {
       })),
       mem.map((m) => ({ zaloUserId: m.zaloUserId, displayName: m.displayName }))
     );
+  }
+
+  /**
+   * Các cặp chuyển tiền đã được tick "đã trả".
+   *
+   * Settlement tính lại mỗi lần mở từ expenses, nhưng việc ai đã thật sự
+   * chuyển tiền thì không phép tính nào suy ra được — phải đọc từ bảng riêng.
+   */
+  async paidPairs(tripId: number): Promise<{ from: string; to: string; tickedBy: string | null }[]> {
+    const rows = await this.db
+      .select()
+      .from(settlementPayments)
+      .where(eq(settlementPayments.tripId, tripId));
+    return rows.map((r) => ({ from: r.fromUserId, to: r.toUserId, tickedBy: r.tickedBy }));
   }
 
   /** Danh bạ OA đối tác — Zalo không có API search OA nên đây là directory tự dựng. */

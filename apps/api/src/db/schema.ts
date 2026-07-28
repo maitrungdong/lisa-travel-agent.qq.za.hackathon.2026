@@ -140,6 +140,13 @@ export const events = pgTable(
     note: text("note"),
     /** Chi phí ước tính (VND) — dùng để dựng ngân sách trước chuyến đi */
     estimatedCost: bigint("estimated_cost", { mode: "number" }),
+    /** pending (Zino đang làm) | done | failed. Lỗi PHẢI hiện, không được ẩn */
+    status: varchar("status", { length: 16 }).notNull().default("done"),
+    failReason: text("fail_reason"),
+    /** zino | user */
+    source: varchar("source", { length: 16 }).notNull().default("user"),
+    bookingRef: varchar("booking_ref", { length: 64 }),
+    partnerOaId: varchar("partner_oa_id", { length: 64 }),
     createdBy: varchar("created_by", { length: 64 }).notNull().default("zino"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -165,6 +172,13 @@ export const expenses = pgTable(
     splitMode: varchar("split_mode", { length: 16 }).notNull().default("equal"),
     /** Ảnh hoá đơn đã lưu trên host mình */
     receiptPhotoUrl: text("receipt_photo_url"),
+    /** user | zino — khoản của Zino kèm txnCode thì khoá số tiền và người trả */
+    source: varchar("source", { length: 16 }).notNull().default("user"),
+    txnCode: varchar("txn_code", { length: 64 }),
+    note: text("note"),
+    createdBy: varchar("created_by", { length: 64 }),
+    updatedBy: varchar("updated_by", { length: 64 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
     spentAt: timestamp("spent_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -579,4 +593,27 @@ export const decisionVotes = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (t) => [uniqueIndex("decision_votes_one_per_person_uq").on(t.decisionId, t.zaloUserId)]
+);
+
+/**
+ * J4 — tick "đã trả" của một cặp chuyển tiền.
+ *
+ * Settlement được TÍNH LẠI mỗi lần mở từ expenses, nhưng "Linh đã chuyển tiền
+ * cho Đông" là sự kiện ngoài đời, không phép tính nào suy ra được. Nên nó phải
+ * có bảng riêng, nếu không tick xong mở lại là mất.
+ */
+export const settlementPayments = pgTable(
+  "settlement_payments",
+  {
+    id: serial("id").primaryKey(),
+    tripId: bigint("trip_id", { mode: "number" })
+      .notNull()
+      .references(() => trips.id),
+    fromUserId: varchar("from_user_id", { length: 64 }).notNull(),
+    toUserId: varchar("to_user_id", { length: 64 }).notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    tickedBy: varchar("ticked_by", { length: 64 }),
+    tickedAt: timestamp("ticked_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [uniqueIndex("settlement_payments_pair_uq").on(t.tripId, t.fromUserId, t.toUserId)]
 );

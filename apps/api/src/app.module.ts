@@ -3,11 +3,14 @@ import { AgentService } from "./agent/agent.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { DatabaseModule } from "./db/database.module";
+import { DecisionsController } from "./decisions/decisions.controller";
+import { DecisionsService } from "./decisions/decisions.service";
 import { DebugController } from "./debug.controller";
 import { HealthController } from "./health.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { WorkerService } from "./jobs/worker.service";
 import { MediaService } from "./media/media.service";
+import { ExpensesController } from "./money/expenses.controller";
 import { MerchantAgentService } from "./oa/merchant-agent.service";
 import { OaClient } from "./oa/oa.client";
 import { OaController } from "./oa/oa.controller";
@@ -42,12 +45,17 @@ import { ZaloController } from "./zalo/zalo.controller";
     OaController,
     // Phiên Mini App + dữ liệu theo người dùng (/auth/*, /me/*)
     AuthController,
+    // J2 — quyết định nhóm: bàn ở chat, chốt ở app
+    DecisionsController,
+    // J4 — người dùng tự thêm/sửa khoản chi, tick đã trả
+    ExpensesController,
     // TẠM — đo namespace id giữa Bot API và Mini App. Xoá sau khi đo xong.
     DebugController
   ],
   providers: [
     TripsService,
     AuthService,
+    DecisionsService,
     ZaloClient,
     ConversationService,
     MediaService,
