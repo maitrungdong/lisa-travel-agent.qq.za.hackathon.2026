@@ -359,17 +359,30 @@ trước khi làm reminder, nếu không lịch nhắc lệch 11 tiếng.
 
 ## 11. Kịch bản demo (5 phút, đúng 3 pha đề bài)
 
+> **Thành phố demo: Vũng Tàu.** Lý do: `themalibuhotel` là OA THẬT đã xác thực —
+> `openChat` mở được chat thật trên sân khấu. Kịch bản chỉ là lời thoại, đổi mất
+> 30 giây; đi tìm OA thật ở thành phố khác mất hàng giờ. Luôn neo demo vào tài
+> sản chắc chắn chạy được.
+
 | Phút | Cảnh | Năng lực chứng minh |
 |---|---|---|
-| 0:00 | Add Lisa vào nhóm → *"Ơ nhóm Đà Nẵng năm ngoái! Vẫn né hải sản cho Đông chứ?"* | **Memory xuyên chuyến đi (L3)** |
-| 0:30 | *"Đi Đà Nẵng 12–14/8, 6 người, 3tr/người"* → Lisa hỏi lại 2 câu → chốt → tạo chuyến | Grounding · confirm-before-commit |
+| 0:00 | Add Lisa vào nhóm → *"Ơ nhóm Vũng Tàu năm ngoái! Vẫn né hải sản cho Đông chứ?"* | **Memory xuyên chuyến đi (L3)** |
+| 0:30 | *"Đi Vũng Tàu 12–14/8, 6 người, 3tr/người"* → Lisa hỏi lại 2 câu → chốt → tạo chuyến | Grounding · confirm-before-commit |
 | 1:00 | *"Lên lịch trình giúp"* → *"Để mình research nha"* → **60s sau tự nhắn** lịch trình 3 ngày có giá thật | **Async agent + web_search + push chủ động** |
-| 2:00 | *"Tìm chỗ ở gần biển"* → 3 OA → mở Mini App → **openChat điền sẵn câu hỏi** → bấm Gửi | ⭐ **OA ecosystem interop** |
+| 2:00 | *"Tìm chỗ ở gần biển"* → ra **Khách sạn Malibu** → mở Mini App → **openChat điền sẵn câu hỏi** → bấm Gửi | ⭐ **OA ecosystem interop** |
 | 2:45 | Chụp hoá đơn quán ăn gửi vào nhóm → Lisa đọc, ghi chi phí, chia đầu người | **Vision OCR + tool ghi state** |
 | 3:15 | Ảnh kỷ niệm → vào gallery Mini App | Đa phương thức |
 | 3:45 | *"Chia tiền"* → bảng ai nợ ai, **số giao dịch tối thiểu** | Thuật toán đúng, có unit test |
-| 4:15 | *"Tổng kết chuyến đi"* → agent dựng **trang web tổng kết** → gửi link | **Managed Agents sandbox** |
-| 4:45 | Slide: OA Extension Hub · ZBS booking template · marketplace 2 chiều | Business growth |
+| 4:15 | *"Tổng kết chuyến đi"* → agent dựng **trang web tổng kết** → gửi link | Agent chạy nền, có sandbox |
+| 4:45 | Slide **Partner Network** (`docs/PARTNER-NETWORK.md`) — code đã có trong repo | Business growth |
+
+**Câu chốt cho phút 2:00** — chuẩn bị sẵn, vì giám khảo Zalo chắc chắn hỏi:
+
+> *"Zalo không có API cho bot nhắn thay user — và điều đó đúng, nó bảo vệ người
+> dùng. Lisa không lách. Lisa soạn hộ câu hỏi đầy đủ, quyền bấm Gửi vẫn là của
+> bạn. Bước tiếp theo là Partner Network: khi khách sạn uỷ quyền OA cho Lisa,
+> câu trả lời của họ tự động quay về nhóm chat — chúng em đã implement, đang chờ
+> đối tác uỷ quyền."*
 
 ---
 

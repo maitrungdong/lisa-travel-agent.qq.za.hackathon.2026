@@ -10,13 +10,75 @@ import { partnerOas } from "./schema";
  * Không có endpoint nào tra OA theo tên/ngành/địa điểm — `oa/getoa` chỉ trả về
  * OA của chính app mình. Nên "discovery" hợp lệ duy nhất là directory tự dựng.
  *
- * ⚠ oa_id dưới đây là DỮ LIỆU MẪU cho demo. Trước khi demo thật, thay bằng
- * oa_id thật lấy từ URL zalo.me/<oa_id> của các OA công khai, hoặc bằng OA
- * test do team tự tạo. Đừng để oa_id giả rồi bấm openChat trên sân khấu.
+ * ⚠ Phần lớn oa_id dưới đây là DỮ LIỆU MẪU. Chỉ `themalibuhotel` là OA THẬT
+ * (đã xác thực) → dùng đúng nó cho khoảnh khắc openChat trên sân khấu.
+ * Bấm "Mở chat" với oa_id giả sẽ báo không tìm thấy OA.
+ *
+ * Lấy oa_id thật: mở OA trên Zalo → ⋯ → Chia sẻ → Sao chép liên kết
+ * → phần sau `zalo.me/` chính là oa_id (số hoặc alias, cả hai đều dùng được).
  *
  * Chạy: pnpm --filter api exec tsx src/db/seed-partners.ts
  */
 const PARTNERS = [
+  // ── Vũng Tàu — THÀNH PHỐ DEMO CHÍNH ──────────────────────────────────
+  // Malibu là OA THẬT, đã xác thực → dùng cho khoảnh khắc openChat trên sân khấu.
+  // Mấy dòng còn lại vẫn là mẫu; thay dần bằng OA thật khi tìm được.
+  {
+    oaId: "themalibuhotel", // ✅ THẬT — https://zalo.me/themalibuhotel
+    name: "Khách sạn Malibu Vũng Tàu",
+    category: "HOTEL",
+    city: "Vũng Tàu",
+    description:
+      "Khách sạn 5 sao kiến trúc châu Âu, gần 200 phòng, hồ bơi - spa - pool bar tầng 5&6",
+    priceHint: "liên hệ để có giá tốt",
+    tags: "gần biển,hồ bơi,spa,5 sao,cho gia đình,cho doanh nhân"
+  },
+  {
+    oaId: "demo-oa-ganhhao-vungtau",
+    name: "Hải sản Gành Hào",
+    category: "FNB",
+    city: "Vũng Tàu",
+    description: "Nhà hàng hải sản view biển Bãi Sau, phục vụ nhóm đông",
+    priceHint: "250k–500k/người",
+    tags: "hải sản,view biển,nhóm đông"
+  },
+  {
+    oaId: "demo-oa-banhkhot-vungtau",
+    name: "Bánh khọt Gốc Vú Sữa",
+    category: "FNB",
+    city: "Vũng Tàu",
+    description: "Bánh khọt đặc sản Vũng Tàu, quán lâu năm",
+    priceHint: "60k–120k/người",
+    tags: "đặc sản,ăn sáng,giá rẻ"
+  },
+  {
+    oaId: "demo-oa-canho-vungtau",
+    name: "Ca nô ra Côn Đảo",
+    category: "TOUR",
+    city: "Vũng Tàu",
+    description: "Tàu cao tốc Vũng Tàu – Côn Đảo, đặt vé theo nhóm",
+    priceHint: "660k–990k/người/lượt",
+    tags: "biển,đảo,cao tốc"
+  },
+  {
+    oaId: "demo-oa-xemay-vungtau",
+    name: "Thuê xe máy Vũng Tàu",
+    category: "TRANSPORT",
+    city: "Vũng Tàu",
+    description: "Giao xe tận khách sạn, xe số và tay ga",
+    priceHint: "120k–180k/ngày",
+    tags: "xe máy,giao tận nơi,theo ngày"
+  },
+  {
+    oaId: "demo-oa-hodo-vungtau",
+    name: "Tour Hồ Tràm – Bình Châu",
+    category: "TOUR",
+    city: "Vũng Tàu",
+    description: "Tour trong ngày suối nước nóng Bình Châu, có xe đưa đón",
+    priceHint: "550k–750k/người",
+    tags: "suối nước nóng,trong ngày,có xe đón"
+  },
+
   // ── Đà Nẵng ──────────────────────────────────────────────────────────
   {
     oaId: "demo-oa-sunrise-danang",
