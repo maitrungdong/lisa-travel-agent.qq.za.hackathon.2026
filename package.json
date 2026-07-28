@@ -11,7 +11,9 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "vitest run",
     "db:generate": "pnpm --filter api db:generate",
-    "db:push": "pnpm --filter api db:push"
+    "db:push": "pnpm --filter api db:push",
+    "seed:demo": "pnpm --filter api seed:demo",
+    "seed:partners": "pnpm --filter api seed:partners"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
