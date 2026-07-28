@@ -5,6 +5,10 @@ import { HealthController } from "./health.controller";
 import { JobsService } from "./jobs/jobs.service";
 import { WorkerService } from "./jobs/worker.service";
 import { MediaService } from "./media/media.service";
+import { MerchantAgentService } from "./oa/merchant-agent.service";
+import { OaClient } from "./oa/oa.client";
+import { OaController } from "./oa/oa.controller";
+import { OaOAuthService } from "./oa/oauth.service";
 import { PartnersController, TripsController } from "./trips/trips.controller";
 import { TripsService } from "./trips/trips.service";
 import { ConversationService } from "./zalo/conversation.service";
@@ -23,7 +27,13 @@ import { ZaloController } from "./zalo/zalo.controller";
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, TripsController, PartnersController, ZaloController],
+  controllers: [
+    HealthController,
+    TripsController,
+    PartnersController,
+    ZaloController,
+    OaController
+  ],
   providers: [
     TripsService,
     ZaloClient,
@@ -31,6 +41,10 @@ import { ZaloController } from "./zalo/zalo.controller";
     MediaService,
     JobsService,
     AgentService,
+    // Partner Network — uỷ quyền OA đối tác + trả lời lead thay merchant
+    OaOAuthService,
+    OaClient,
+    MerchantAgentService,
     WorkerService
   ]
 })

@@ -4,7 +4,14 @@ import { and, eq, lte, or, sql } from "drizzle-orm";
 import { DB, type Database } from "../db/database.module";
 import { jobs } from "../db/schema";
 
-export type JobKind = "agent_turn" | "reflection" | "deep_plan" | "recap" | "reminder";
+export type JobKind =
+  | "agent_turn"
+  | "reflection"
+  | "deep_plan"
+  | "recap"
+  | "reminder"
+  /** Partner Network: user nhắn OA đối tác → agent trả lời thay merchant */
+  | "merchant_reply";
 
 export interface Job {
   id: number;

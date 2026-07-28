@@ -62,6 +62,10 @@ services:
       # Bảo vệ các endpoint ghi dữ liệu (worker/agent gọi nội bộ)
       AGENT_API_KEY: ${AGENT_API_KEY:?thiếu AGENT_API_KEY trong .env}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?thiếu ANTHROPIC_API_KEY trong .env}
+      # Partner Network — để trống là tắt tính năng, phần còn lại vẫn chạy bình thường
+      ZALO_APP_ID: ${ZALO_APP_ID:-}
+      ZALO_APP_SECRET: ${ZALO_APP_SECRET:-}
+      ZALO_OA_SECRET: ${ZALO_OA_SECRET:-}
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?thiếu ZALO_BOT_TOKEN trong .env}
       # Zalo gửi kèm header X-Bot-Api-Secret-Token = đúng giá trị này ở mỗi webhook
       ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:?thiếu ZALO_WEBHOOK_SECRET trong .env}

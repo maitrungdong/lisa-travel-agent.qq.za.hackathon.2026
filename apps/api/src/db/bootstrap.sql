@@ -190,3 +190,39 @@ CREATE TABLE IF NOT EXISTS partner_oas (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS partner_oas_oa_uq     ON partner_oas (oa_id);
 CREATE INDEX        IF NOT EXISTS partner_oas_search_idx ON partner_oas (city, category);
+
+-- ── Partner Network: uỷ quyền OA đối tác ────────────────────────────────────
+-- OA bấm "Cho phép" → app nhận webhook tin user gửi OA đó và trả lời thay họ.
+-- Xem docs/PARTNER-NETWORK.md.
+
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS connected        boolean     NOT NULL DEFAULT false;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS access_token     text;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS refresh_token    text;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS token_expires_at timestamptz;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS connected_at     timestamptz;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS auto_reply       boolean     NOT NULL DEFAULT true;
+ALTER TABLE partner_oas ADD COLUMN IF NOT EXISTS inventory_note   text;
+
+-- PKCE: giữ code_verifier giữa /oa/connect và /oa/callback. TTL 10 phút.
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state         varchar(64) PRIMARY KEY,
+  code_verifier varchar(128) NOT NULL,
+  created_at    timestamptz  NOT NULL DEFAULT now()
+);
+
+-- Lead: user hỏi OA đối tác, bắt nguồn từ hội thoại Lisa.
+CREATE TABLE IF NOT EXISTS oa_leads (
+  id                serial PRIMARY KEY,
+  partner_oa_id     bigint      NOT NULL REFERENCES partner_oas(id),
+  oa_user_id        varchar(64) NOT NULL,
+  oa_user_name      text,
+  conversation_id   bigint,
+  trip_id           bigint,
+  last_user_message text,
+  last_reply        text,
+  status            varchar(16) NOT NULL DEFAULT 'new',
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX        IF NOT EXISTS oa_leads_partner_idx     ON oa_leads (partner_oa_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS oa_leads_partner_user_uq ON oa_leads (partner_oa_id, oa_user_id);

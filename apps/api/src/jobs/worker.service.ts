@@ -7,6 +7,7 @@ import { loadTripState, type ToolContext } from "../agent/tools";
 import { DB, type Database } from "../db/database.module";
 import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
+import { MerchantAgentService } from "../oa/merchant-agent.service";
 import { ConversationService } from "../zalo/conversation.service";
 import { ZaloClient } from "../zalo/zalo.client";
 import { JobsService, type Job } from "./jobs.service";
@@ -33,7 +34,8 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly agent: AgentService,
     private readonly zalo: ZaloClient,
     private readonly conversations: ConversationService,
-    private readonly media: MediaService
+    private readonly media: MediaService,
+    private readonly merchant: MerchantAgentService
   ) {}
 
   onApplicationBootstrap(): void {
@@ -84,6 +86,10 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
           break;
         case "reflection":
           await this.handleReflection(job);
+          break;
+        case "merchant_reply":
+          // Partner Network: trả lời lead thay OA đối tác rồi đẩy về nhóm Lisa
+          await this.merchant.handleLead(job.payload.leadId as number);
           break;
         default:
           this.log.warn(`Job kind lạ: ${job.kind}`);

@@ -305,10 +305,69 @@ export const partnerOas = pgTable(
     /** https://zalo.me/<oaId> */
     deeplink: text("deeplink"),
     tags: text("tags"), // csv: "gần biển,có hồ bơi,cho trẻ em"
+
+    /* ---- Uỷ quyền OAuth (Partner Network) -------------------------------
+     * OA đã bấm "Cho phép" cho app của Lisa → ta nhận được webhook tin nhắn
+     * user gửi tới OA đó, và trả lời thay họ. Xem docs/PARTNER-NETWORK.md.
+     */
+    connected: boolean("connected").notNull().default(false),
+    accessToken: text("access_token"),
+    /** 3 tháng, DÙNG MỘT LẦN — mỗi lần refresh trả về token mới */
+    refreshToken: text("refresh_token"),
+    /** Access token sống 25 GIỜ (không phải 1 giờ) */
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    /** Cho phép agent tự trả lời lead thay merchant */
+    autoReply: boolean("auto_reply").notNull().default(true),
+    /** Dữ liệu merchant tự khai: bảng giá, loại phòng, chính sách huỷ.
+     *  Merchant agent CHỈ trả lời trong phạm vi này — không có thì không bịa. */
+    inventoryNote: text("inventory_note"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (t) => [
     uniqueIndex("partner_oas_oa_uq").on(t.oaId),
     index("partner_oas_search_idx").on(t.city, t.category)
+  ]
+);
+
+/**
+ * Lưu `code_verifier` của PKCE giữa /oa/connect và /oa/callback.
+ * TTL 10 phút — đúng bằng hiệu lực của authorization_code.
+ */
+export const oauthStates = pgTable("oauth_states", {
+  state: varchar("state", { length: 64 }).primaryKey(),
+  /** Chuỗi ĐÚNG 43 ký tự, khác nhau mỗi request */
+  codeVerifier: varchar("code_verifier", { length: 128 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
+ * Một "lead": user hỏi OA đối tác, bắt nguồn từ hội thoại với Lisa.
+ * Dùng để nối tin trả lời của merchant ngược về đúng nhóm chat.
+ */
+export const oaLeads = pgTable(
+  "oa_leads",
+  {
+    id: serial("id").primaryKey(),
+    partnerOaId: bigint("partner_oa_id", { mode: "number" })
+      .notNull()
+      .references(() => partnerOas.id),
+    /** UID của user, scope theo TỪNG OA — khác nhau giữa các OA */
+    oaUserId: varchar("oa_user_id", { length: 64 }).notNull(),
+    oaUserName: text("oa_user_name"),
+    /** Hội thoại Lisa đã giới thiệu OA này (nếu truy được) */
+    conversationId: bigint("conversation_id", { mode: "number" }),
+    tripId: bigint("trip_id", { mode: "number" }),
+    lastUserMessage: text("last_user_message"),
+    lastReply: text("last_reply"),
+    /** new | replied | closed */
+    status: varchar("status", { length: 16 }).notNull().default("new"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [
+    index("oa_leads_partner_idx").on(t.partnerOaId, t.createdAt),
+    uniqueIndex("oa_leads_partner_user_uq").on(t.partnerOaId, t.oaUserId)
   ]
 );
