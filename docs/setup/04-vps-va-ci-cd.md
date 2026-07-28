@@ -64,6 +64,20 @@ SSH key riêng cho deploy: `ssh-keygen -t ed25519 -f deploy_key` → public key 
 
 Rollback API: re-run `deploy-api.yml` ở commit cũ (image pin theo SHA).
 
+## 3b. Deploy tay từ máy dev (khi CI hỏng)
+
+```bash
+bash scripts/deploy-api-local.sh              # API — build ngay trên VPS
+bash scripts/deploy-miniapp.sh                # Mini App — build ở máy rồi zmp deploy
+```
+
+`deploy-api-local.sh` đẩy source `apps/api` lên VPS rồi `docker build` tại chỗ,
+không cần GHCR và không phải nhớ `--platform linux/amd64` (VPS x86_64, Mac ARM —
+build nhầm kiến trúc thì container chết ngay với `exec format error`).
+
+Script đổi `API_IMAGE` trong `/opt/zino/.env` sang tag local; lần chạy
+`deploy-api.yml` kế tiếp sẽ ghi đè lại bằng image GHCR — đúng như mong đợi.
+
 ## 4. Checklist demo hackathon
 
 - [ ] Add bot Zino vào nhóm Zalo của team, @Zino để lên kế hoạch.
