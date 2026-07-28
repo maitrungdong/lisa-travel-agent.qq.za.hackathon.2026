@@ -1,11 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { CalendarDays, Home, Images, Store, Wallet } from "lucide-react";
+import { CalendarDays, Home, Images, Wallet } from "lucide-react";
 import { cn } from "../lib/utils";
 
+/**
+ * Bốn tab, đúng theo wireframe: Tổng quan · Lịch trình · Chi phí · Kỷ niệm.
+ *
+ * "Đối tác" đã bỏ khỏi thanh dưới. Nó không phải một nơi người dùng muốn tới —
+ * nó là bước giữa của việc "nhờ Zino hỏi chỗ này". Để nó ngang hàng với Chi phí
+ * là nói sai về tần suất dùng. Route /partners vẫn còn, vào từ Trang chủ.
+ */
 const tabs = [
-  { to: "/", label: "Trang chủ", icon: Home },
+  { to: "/", label: "Tổng quan", icon: Home },
   { to: "/itinerary", label: "Lịch trình", icon: CalendarDays },
-  { to: "/partners", label: "Đối tác", icon: Store },
   { to: "/expenses", label: "Chi phí", icon: Wallet },
   { to: "/gallery", label: "Kỷ niệm", icon: Images }
 ];

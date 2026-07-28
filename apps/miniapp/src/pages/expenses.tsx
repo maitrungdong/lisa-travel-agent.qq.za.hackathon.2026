@@ -1,4 +1,8 @@
-import { ArrowRight, Receipt } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Lock, Plus, Receipt } from "lucide-react";
+import { api, type Expense } from "../lib/api";
+import { currentActor, setActor, type Actor } from "../lib/actor";
+import { ExpenseForm } from "../components/expense-form";
 import { useRecap } from "../lib/use-trip";
 import { TripHeader } from "../components/trip-header";
 import { Card, CardContent } from "../components/ui/card";
@@ -24,6 +28,31 @@ const CATEGORY_ICON: Record<string, string> = {
  */
 export default function ExpensesPage() {
   const { data, loading, error, isEmpty, reload } = useRecap();
+  const [actor, setActorState] = useState<Actor | null>(currentActor);
+  const [form, setForm] = useState<{ open: boolean; editing: Expense | null }>({
+    open: false,
+    editing: null
+  });
+  const [paid, setPaid] = useState<Set<string> | null>(null);
+  const [busyPair, setBusyPair] = useState<string | null>(null);
+
+  const tripId = data?.trip.id;
+  // Tick "đã trả" nằm ở bảng riêng, không suy ra được từ settlement — phải tải rời.
+  useEffect(() => {
+    if (!tripId) return;
+    let cancelled = false;
+    api
+      .paidPairs(tripId)
+      .then((r) => {
+        if (!cancelled) setPaid(new Set(r.pairs.map((x) => `${x.from}>${x.to}`)));
+      })
+      .catch(() => {
+        if (!cancelled) setPaid(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId]);
 
   if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -129,16 +158,34 @@ export default function ExpensesPage() {
       {settlement.settlements.length > 0 && (
         <section className="space-y-2">
           <SectionTitle>Chia tiền · {settlement.settlements.length} giao dịch là xong</SectionTitle>
-          {settlement.settlements.map((s, i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center gap-2 py-3">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.fromName}</span>
-                <ArrowRight size={16} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.toName}</span>
-                <span className="shrink-0 font-semibold text-sky-600">{formatVnd(s.amount)}</span>
-              </CardContent>
-            </Card>
-          ))}
+          {settlement.settlements.map((s, i) => {
+            const key = `${s.from}>${s.to}`;
+            const done = paid?.has(key) ?? false;
+            return (
+              <Card key={i} className={done ? "opacity-60" : undefined}>
+                <CardContent className="flex items-center gap-2 py-3">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.fromName}</span>
+                  <ArrowRight size={16} className="shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.toName}</span>
+                  <span
+                    className={`shrink-0 font-semibold ${done ? "text-muted-foreground line-through" : "text-sky-600"}`}
+                  >
+                    {formatVnd(s.amount)}
+                  </span>
+                  {/* Tick được nếu là người trả, người nhận, hoặc người tổ chức —
+                      ba người đều biết sự thật về việc chuyển tiền đó. */}
+                  <button
+                    type="button"
+                    disabled={!actor || busyPair === key}
+                    onClick={() => void togglePaid(s.from, s.to, s.amount, !done)}
+                    className="shrink-0 rounded-md border border-border px-2 py-1 text-[11px] font-medium disabled:opacity-40"
+                  >
+                    {busyPair === key ? "…" : done ? "☑ đã trả" : "☐ đã trả"}
+                  </button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </section>
       )}
 
@@ -185,7 +232,21 @@ export default function ExpensesPage() {
 
       {/* Danh sách khoản chi — mới nhất lên trên */}
       <section className="space-y-2">
-        <SectionTitle>{expenses.length} khoản chi</SectionTitle>
+        <SectionTitle
+          action={
+            actor ? (
+              <button
+                type="button"
+                onClick={() => setForm({ open: true, editing: null })}
+                className="flex items-center gap-1 text-xs font-semibold text-primary"
+              >
+                <Plus size={13} /> Thêm khoản chi
+              </button>
+            ) : undefined
+          }
+        >
+          {expenses.length} khoản chi
+        </SectionTitle>
         {[...expenses].reverse().map((e) => (
           <Card key={e.id}>
             <CardContent className="flex items-center gap-3 py-3">
@@ -211,7 +272,23 @@ export default function ExpensesPage() {
                   })}
                 </p>
               </div>
-              <p className="shrink-0 font-semibold">{formatVnd(e.amount)}</p>
+              <div className="shrink-0 text-right">
+                <p className="font-semibold">{formatVnd(e.amount)}</p>
+                {/* Khoá hiện ngay trên dòng: nhìn là biết cái nào sửa được */}
+                {e.source === "zino" && e.txnCode ? (
+                  <span className="flex items-center justify-end gap-0.5 text-[11px] text-muted-foreground">
+                    <Lock size={10} /> {e.txnCode}
+                  </span>
+                ) : actor ? (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ open: true, editing: e })}
+                    className="text-[11px] font-medium text-primary"
+                  >
+                    Sửa
+                  </button>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -225,7 +302,74 @@ export default function ExpensesPage() {
         </div>
       )}
 
+      {!actor && (
+        <Card>
+          <CardContent className="space-y-2 py-3.5">
+            <p className="text-sm font-semibold">Bạn là ai trong nhóm?</p>
+            <p className="text-xs text-muted-foreground">
+              Cần biết để ghi đúng ai trả tiền. Chỉ hỏi một lần.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.members.map((m) => (
+                <button
+                  key={m.zaloUserId}
+                  type="button"
+                  onClick={() => {
+                    const a = {
+                      zaloUserId: m.zaloUserId,
+                      displayName: m.displayName,
+                      role: m.role
+                    };
+                    setActor(a);
+                    setActorState(a);
+                  }}
+                  className="rounded-full bg-muted px-3 py-2 text-sm font-medium"
+                >
+                  {m.displayName}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {form.open && actor && (
+        <ExpenseForm
+          tripId={trip.id}
+          members={data.members}
+          actor={actor}
+          editing={form.editing}
+          onClose={() => setForm({ open: false, editing: null })}
+          onSaved={reload}
+        />
+      )}
+
       <div className="pb-4" />
     </div>
   );
+
+  async function togglePaid(from: string, to: string, amount: number, next: boolean) {
+    if (!actor || !tripId) return;
+    const key = `${from}>${to}`;
+    setBusyPair(key);
+    try {
+      await api.tickPaid(tripId, {
+        actorZaloId: actor.zaloUserId,
+        fromUserId: from,
+        toUserId: to,
+        amount,
+        paid: next
+      });
+      setPaid((prev) => {
+        const s2 = new Set(prev ?? []);
+        if (next) s2.add(key);
+        else s2.delete(key);
+        return s2;
+      });
+    } catch {
+      /* giữ nguyên trạng thái cũ — người dùng bấm lại được */
+    } finally {
+      setBusyPair(null);
+    }
+  }
 }

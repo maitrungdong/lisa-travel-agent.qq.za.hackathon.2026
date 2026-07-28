@@ -30,6 +30,11 @@ export interface TripEvent {
   kind: string;
   note: string | null;
   estimatedCost: number | null;
+  /** pending (Zino đang làm) | done | failed — lỗi phải hiện, không được ẩn */
+  status?: string;
+  failReason?: string | null;
+  source?: string;
+  bookingRef?: string | null;
 }
 
 export interface Expense {
@@ -42,6 +47,11 @@ export interface Expense {
   paidByName: string | null;
   receiptPhotoUrl: string | null;
   spentAt: string;
+  /** user | zino — khoản của Zino kèm txnCode thì số tiền bị khoá */
+  source?: string;
+  txnCode?: string | null;
+  note?: string | null;
+  createdBy?: string | null;
 }
 
 export interface Photo {
@@ -65,6 +75,8 @@ export interface Member {
   id: number;
   zaloUserId: string;
   displayName: string;
+  /** member | organizer — chỉ người tổ chức mới chốt được phương án */
+  role?: string;
 }
 
 export interface Activity {
@@ -170,9 +182,61 @@ export interface Recap {
   generatedAt: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * J2 — Quyết định nhóm. Bàn ở chat, chốt ở app.
+ * ------------------------------------------------------------------ */
+
+export interface DecisionOption {
+  id: number;
+  label: string;
+  detail: string | null;
+  price: number | null;
+  partnerOaId: string | null;
+  votes: number;
+  voterNames: string[];
+  isRecommended: boolean;
+}
+
+export interface Decision {
+  id: number;
+  tripId: number;
+  kind: string;
+  title: string;
+  /** open | tie | decided | cancelled */
+  status: string;
+  recommendedOptionId: number | null;
+  recommendationReason: string | null;
+  decidedOptionId: number | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  againstMajority: boolean;
+  options: DecisionOption[];
+  /** Ai chưa bình chọn — wireframe bắt buộc hiện */
+  pendingNames: string[];
+  totalVotes: number;
+  memberCount: number;
+  isTie: boolean;
+}
+
 export const api = {
   trips: () => request<Trip[]>("/trips"),
   trip: (id: number) => request<Trip>(`/trips/${id}`),
+
+  decisions: (tripId: number) => request<Decision[]>(`/trips/${tripId}/decisions`),
+  activeDecision: (tripId: number) =>
+    request<{ decision: Decision | null }>(`/trips/${tripId}/decisions/active`),
+
+  vote: (decisionId: number, optionId: number, actor: { zaloUserId: string; displayName: string }) =>
+    request<Decision>(`/decisions/${decisionId}/vote`, {
+      method: "POST",
+      body: JSON.stringify({ optionId, ...actor })
+    }),
+
+  decide: (decisionId: number, optionId: number, actor: { zaloUserId: string; displayName: string }) =>
+    request<{ view: Decision; alreadyDecided: boolean }>(`/decisions/${decisionId}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ optionId, ...actor })
+    }),
 
   /** Lịch trình gom theo ngày + chi tiêu theo hạng mục — 1 request cho cả màn. */
   recap: (id: number) => request<Recap>(`/trips/${id}/recap`),
@@ -186,6 +250,61 @@ export const api = {
   notes: (tripId: number) => request<Note[]>(`/trips/${tripId}/notes`),
   members: (tripId: number) => request<Member[]>(`/trips/${tripId}/members`),
   settle: (tripId: number) => request<Settlement>(`/trips/${tripId}/settle`),
+
+  /* --- J4: người dùng tự ghi sổ ------------------------------------- */
+
+  addExpense: (
+    tripId: number,
+    body: {
+      actorZaloId: string;
+      actorName?: string;
+      title: string;
+      amount: number;
+      category: string;
+      paidBy: string;
+      paidByName?: string;
+      splitWith?: string[];
+      spentAt?: string;
+      note?: string;
+    }
+  ) => request<Expense>(`/trips/${tripId}/expenses/user`, { method: "POST", body: JSON.stringify(body) }),
+
+  editExpense: (
+    id: number,
+    body: {
+      actorZaloId: string;
+      title?: string;
+      amount?: number;
+      category?: string;
+      paidBy?: string;
+      splitWith?: string[];
+      note?: string;
+    }
+  ) =>
+    request<{ expense: Expense; rejected: string[] }>(`/expenses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    }),
+
+  deleteExpense: (id: number, actorZaloId: string) =>
+    request<{ ok: boolean }>(`/expenses/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ actorZaloId })
+    }),
+
+  paidPairs: (tripId: number) =>
+    request<{ pairs: { from: string; to: string; amount: number; tickedBy: string | null }[] }>(
+      `/trips/${tripId}/settlement/paid`
+    ),
+
+  tickPaid: (
+    tripId: number,
+    body: { actorZaloId: string; fromUserId: string; toUserId: string; amount: number; paid: boolean }
+  ) =>
+    request<{ paid: boolean }>(`/trips/${tripId}/settlement/paid`, {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
 
   partners: (opts: { city?: string; category?: string } = {}) => {
     const q = new URLSearchParams();

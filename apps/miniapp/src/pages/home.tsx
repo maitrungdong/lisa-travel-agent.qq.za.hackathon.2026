@@ -7,9 +7,11 @@ import {
   Link2,
   Luggage,
   Sparkles,
+  Store,
   Wallet
 } from "lucide-react";
-import { api, recapPageUrl, type Activity } from "../lib/api";
+import { api, recapPageUrl, type Activity, type Decision } from "../lib/api";
+import { DecisionCard } from "../components/decision-card";
 import { AUTH_ENABLED, DEBUG_UI } from "../lib/flags";
 import { session, type MeResponse } from "../lib/session";
 import { fetchZaloUser, openExternal, type ZaloUser } from "../lib/zalo";
@@ -35,6 +37,7 @@ export default function HomePage() {
   const { data, loading, error, isEmpty, reload } = useRecap();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [decision, setDecision] = useState<Decision | null>(null);
 
   useEffect(() => {
     void fetchZaloUser().then(setUser);
@@ -52,6 +55,22 @@ export default function HomePage() {
       .full(data.trip.id)
       .then((f) => {
         if (!cancelled) setActivities(f.activities.slice(0, 5));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  // Quyết định đang chờ chốt. Tải rời khỏi recap vì nó đổi thường xuyên hơn
+  // (mỗi lượt bình chọn) và vì hỏng nó không được kéo sập cả Trang chủ.
+  useEffect(() => {
+    if (!data) return;
+    let cancelled = false;
+    api
+      .activeDecision(data.trip.id)
+      .then((r) => {
+        if (!cancelled) setDecision(r.decision);
       })
       .catch(() => undefined);
     return () => {
@@ -217,8 +236,18 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
+      {/* Thẻ ĐANG CHỜ CHỐT — wireframe J2 gọi đây là màn quan trọng nhất.
+          Đặt ngay dưới thẻ chuyến đi: mở app ra là thấy việc cần làm. */}
+      {decision && (decision.status === "open" || decision.status === "tie") && (
+        <DecisionCard
+          decision={decision}
+          members={data.members}
+          onChanged={(d) => setDecision(d.status === "decided" ? null : d)}
+        />
+      )}
+
       {/* Lối tắt sang các tab — bấm ngay, khỏi mò thanh dưới */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {[
           {
             to: "/itinerary",
@@ -232,7 +261,9 @@ export default function HomePage() {
             label: "Chi phí",
             sub: txCount ? `${txCount} giao dịch` : formatVnd(stats.perPerson)
           },
-          { to: "/gallery", icon: Images, label: "Kỷ niệm", sub: `${stats.photoCount} ảnh` }
+          { to: "/gallery", icon: Images, label: "Kỷ niệm", sub: `${stats.photoCount} ảnh` },
+          // Đối tác không còn ở thanh tab dưới — đây là lối vào duy nhất
+          { to: "/partners", icon: Store, label: "Đối tác", sub: trip.destination }
         ].map(({ to, icon: Icon, label, sub }) => (
           <Link
             key={to}
