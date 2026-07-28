@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/bottom-nav";
+import ChatPage from "./pages/chat";
 import DebugPage from "./pages/debug";
 import ExpensesPage from "./pages/expenses";
 import GalleryPage from "./pages/gallery";
@@ -18,6 +19,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/itinerary" element={<ItineraryPage />} />
+          {/* Chat trong app — chỗ duy nhất Zino vừa nói vừa đưa nút bấm */}
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/partners" element={<PartnersPage />} />

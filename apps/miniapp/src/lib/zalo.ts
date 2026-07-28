@@ -1,6 +1,6 @@
 // Wrapper quanh zmp-sdk: gọi được cả trong Zalo lẫn trình duyệt thường
 // (dev trên desktop không có bridge native → fallback, không crash).
-import { getUserInfo, openChat, openWebview } from "zmp-sdk/apis";
+import { getUserInfo, openChat, openWebview, scanQRCode } from "zmp-sdk/apis";
 
 export interface ZaloUser {
   id: string;
@@ -39,6 +39,22 @@ export async function openExternal(url: string): Promise<void> {
     await openWebview({ url });
   } catch {
     window.open(url, "_blank", "noopener");
+  }
+}
+
+/**
+ * Quét mã QR bằng camera của Zalo.
+ *
+ * Trả về null thay vì ném lỗi cho MỌI trường hợp không quét được — người dùng
+ * huỷ, ngoài app Zalo, hoặc từ chối quyền camera. Ba tình huống đó với màn hình
+ * gọi nó đều dẫn tới cùng một việc: mời nhập tay.
+ */
+export async function scanQr(): Promise<string | null> {
+  try {
+    const r = await scanQRCode({});
+    return typeof r?.content === "string" && r.content ? r.content : null;
+  } catch {
+    return null;
   }
 }
 

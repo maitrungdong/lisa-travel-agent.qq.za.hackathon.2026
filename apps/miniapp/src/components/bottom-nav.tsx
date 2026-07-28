@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { CalendarDays, Home, Images, Wallet } from "lucide-react";
+import { Bot, CalendarDays, Home, Images, Wallet } from "lucide-react";
 import { cn } from "../lib/utils";
 
 /**
@@ -12,6 +12,7 @@ import { cn } from "../lib/utils";
 const tabs = [
   { to: "/", label: "Tổng quan", icon: Home },
   { to: "/itinerary", label: "Lịch trình", icon: CalendarDays },
+  { to: "/chat", label: "Hỏi Zino", icon: Bot },
   { to: "/expenses", label: "Chi phí", icon: Wallet },
   { to: "/gallery", label: "Kỷ niệm", icon: Images }
 ];

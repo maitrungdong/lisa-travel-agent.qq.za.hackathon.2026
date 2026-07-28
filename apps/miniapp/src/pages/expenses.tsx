@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Lock, Plus, Receipt } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { ArrowRight, Lock, Plus, QrCode, Receipt } from "lucide-react";
 import { api, type Expense } from "../lib/api";
 import { currentActor, setActor, type Actor } from "../lib/actor";
+import { parsePaymentQr, suggestTitle } from "../lib/qr";
+import { scanQr } from "../lib/zalo";
 import { ExpenseForm } from "../components/expense-form";
 import { useRecap } from "../lib/use-trip";
 import { TripHeader } from "../components/trip-header";
@@ -35,6 +38,28 @@ export default function ExpensesPage() {
   });
   const [paid, setPaid] = useState<Set<string> | null>(null);
   const [busyPair, setBusyPair] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [prefill, setPrefill] = useState<{ title?: string; amount?: number; note?: string } | null>(
+    null
+  );
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+
+  /**
+   * Mở form từ nơi khác: tab Hỏi Zino điều hướng sang đây kèm `?add=1` và dữ
+   * liệu đã đọc từ mã QR. Xoá query ngay sau khi dùng — không thì bấm back rồi
+   * vào lại là form tự bật lên lần nữa.
+   */
+  useEffect(() => {
+    if (params.get("add") !== "1") return;
+    const amount = Number(params.get("amount") ?? "");
+    setPrefill({
+      title: params.get("title") ?? undefined,
+      amount: Number.isFinite(amount) && amount > 0 ? amount : undefined,
+      note: params.get("note") ?? undefined
+    });
+    setForm({ open: true, editing: null });
+    setParams({}, { replace: true });
+  }, [params, setParams]);
 
   const tripId = data?.trip.id;
   // Tick "đã trả" nằm ở bảng riêng, không suy ra được từ settlement — phải tải rời.
@@ -235,13 +260,25 @@ export default function ExpensesPage() {
         <SectionTitle
           action={
             actor ? (
-              <button
-                type="button"
-                onClick={() => setForm({ open: true, editing: null })}
-                className="flex items-center gap-1 text-xs font-semibold text-primary"
-              >
-                <Plus size={13} /> Thêm khoản chi
-              </button>
+              <span className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void scanAndAdd()}
+                  className="flex items-center gap-1 text-xs font-semibold text-primary"
+                >
+                  <QrCode size={13} /> Quét QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrefill(null);
+                    setForm({ open: true, editing: null });
+                  }}
+                  className="flex items-center gap-1 text-xs font-semibold text-primary"
+                >
+                  <Plus size={13} /> Thêm
+                </button>
+              </span>
             ) : undefined
           }
         >
@@ -333,13 +370,23 @@ export default function ExpensesPage() {
         </Card>
       )}
 
+      {scanMsg && (
+        <div className="fixed inset-x-4 bottom-24 z-40 rounded-xl bg-foreground/95 p-3 text-xs text-background shadow-lg">
+          {scanMsg}
+        </div>
+      )}
+
       {form.open && actor && (
         <ExpenseForm
           tripId={trip.id}
           members={data.members}
           actor={actor}
           editing={form.editing}
-          onClose={() => setForm({ open: false, editing: null })}
+          prefill={prefill}
+          onClose={() => {
+            setForm({ open: false, editing: null });
+            setPrefill(null);
+          }}
           onSaved={reload}
         />
       )}
@@ -347,6 +394,34 @@ export default function ExpensesPage() {
       <div className="pb-4" />
     </div>
   );
+
+  /** Quét QR hoá đơn rồi mở form đã điền sẵn. */
+  async function scanAndAdd() {
+    const raw = await scanQr();
+    if (!raw) {
+      flash("Không quét được — nhập tay cũng nhanh mà.");
+      return;
+    }
+    const qr = parsePaymentQr(raw);
+    if (!qr.isPayment) {
+      flash("Mã này không phải QR thanh toán.");
+      return;
+    }
+    setPrefill({
+      title: suggestTitle(qr),
+      amount: qr.amount ?? undefined,
+      note: qr.merchantName ? `QR ${qr.merchantName}` : undefined
+    });
+    setForm({ open: true, editing: null });
+    // QR không ghi sẵn số tiền là chuyện thường — nói ra để người dùng khỏi
+    // tưởng app đọc thiếu.
+    if (qr.amount == null) flash("QR không ghi số tiền — bạn nhập giúp mình nhé.");
+  }
+
+  function flash(msg: string) {
+    setScanMsg(msg);
+    setTimeout(() => setScanMsg(null), 2800);
+  }
 
   async function togglePaid(from: string, to: string, amount: number, next: boolean) {
     if (!actor || !tripId) return;

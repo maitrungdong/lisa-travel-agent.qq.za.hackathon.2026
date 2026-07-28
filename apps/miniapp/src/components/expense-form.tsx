@@ -28,6 +28,7 @@ export function ExpenseForm({
   members,
   actor,
   editing,
+  prefill,
   onClose,
   onSaved
 }: {
@@ -36,17 +37,21 @@ export function ExpenseForm({
   actor: Actor;
   /** null = thêm mới */
   editing: Expense | null;
+  /** Dữ liệu đọc từ mã QR — chỉ dùng khi thêm mới */
+  prefill?: { title?: string; amount?: number; note?: string } | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const locked = Boolean(editing && editing.source === "zino" && editing.txnCode);
 
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [title, setTitle] = useState(editing?.title ?? prefill?.title ?? "");
+  const [amount, setAmount] = useState(
+    editing ? String(editing.amount) : prefill?.amount ? String(prefill.amount) : ""
+  );
   const [category, setCategory] = useState(editing?.category ?? "food");
   const [paidBy, setPaidBy] = useState(editing?.paidBy ?? actor.zaloUserId);
   const [splitWith, setSplitWith] = useState<string[]>(members.map((m) => m.zaloUserId));
-  const [note, setNote] = useState(editing?.note ?? "");
+  const [note, setNote] = useState(editing?.note ?? prefill?.note ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

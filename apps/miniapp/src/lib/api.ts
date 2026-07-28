@@ -218,7 +218,44 @@ export interface Decision {
   isTie: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Chat trong app. Zalo Bot API không gửi được nút bấm, nên "thẻ hành
+ * động" chỉ tồn tại ở đây. `kind` là tập ĐÓNG — app phải biết cách xử lý
+ * mọi giá trị, không để server bịa ra kiểu mới rồi render nút chết.
+ * ------------------------------------------------------------------ */
+
+export interface ChatAction {
+  kind:
+    | "open_tab"
+    | "scroll_to_event"
+    | "open_decision"
+    | "add_expense"
+    | "scan_qr"
+    | "copy_to_chat";
+  label: string;
+  value?: string;
+}
+
+export interface ChatCard {
+  level: "error" | "warn" | "info" | "neutral";
+  title: string;
+  detail?: string;
+  actions: ChatAction[];
+}
+
+export interface ChatReply {
+  text: string;
+  cards: ChatCard[];
+  /** deterministic = tính bằng code · llm = model diễn giải */
+  source: "deterministic" | "llm";
+}
+
 export const api = {
+  chat: (
+    tripId: number,
+    body: { message: string; actorZaloId?: string; actorName?: string }
+  ) => request<ChatReply>(`/trips/${tripId}/chat`, { method: "POST", body: JSON.stringify(body) }),
+
   trips: () => request<Trip[]>("/trips"),
   trip: (id: number) => request<Trip>(`/trips/${id}`),
 
