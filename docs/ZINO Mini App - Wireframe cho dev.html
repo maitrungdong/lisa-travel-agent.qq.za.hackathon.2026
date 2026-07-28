@@ -1,0 +1,695 @@
+
+<!-- saved from url=(0249)file:///Users/lap15564/Library/Application%20Support/Claude/local-agent-mode-sessions/37983dd3-6894-4c55-a019-8b04340bd78b/71218c83-8d53-498f-b7a6-1b8321c37544/local_218f6ed7-5626-4776-b284-e3573c748c28/outputs/ZINO%20Mini%20App%20-%20Wireframe.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>ZINO Mini App — Wireframe cho dev</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font: 13px/1.5 "Helvetica Neue", Arial, sans-serif;
+    color: #222; background: #fafafa; margin: 0; padding: 28px 24px 60px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #666; margin: 0 0 24px; font-size: 13px; }
+
+  .legend {
+    background: #fff; border: 1px solid #ddd; padding: 14px 16px;
+    margin-bottom: 28px; font-size: 12px;
+  }
+  .legend b { display: block; margin-bottom: 6px; font-size: 12px; }
+  .legend code {
+    background: #f0f0f0; padding: 1px 5px; font-family: ui-monospace, Menlo, monospace;
+  }
+  .legend span { display: inline-block; margin-right: 18px; white-space: nowrap; }
+
+  h2 {
+    font-size: 15px; margin: 34px 0 4px; padding-bottom: 6px;
+    border-bottom: 2px solid #222;
+  }
+  .jsub { color: #666; font-size: 12px; margin: 0 0 14px; }
+
+  .flow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; }
+  .step { width: 258px; }
+  .arrow { align-self: center; color: #888; font-size: 20px; padding: 0 4px; margin-top: 60px; }
+
+  .cap {
+    font-size: 11px; color: #666; margin: 6px 2px 0; line-height: 1.4;
+  }
+  .cap b { color: #222; }
+
+  /* phone shell */
+  .scr { border: 1px solid #333; background: #fff; }
+  .bar {
+    font-size: 11px; padding: 5px 8px; border-bottom: 1px solid #333;
+    background: #eee; display: flex; justify-content: space-between;
+  }
+  .bar.chat { background: #dfe7df; }
+  .bar.app { background: #e2ece6; }
+  .body { padding: 8px; min-height: 300px; }
+  .tabs {
+    display: flex; border-top: 1px solid #333; font-size: 9.5px; text-align: center;
+  }
+  .tabs div { flex: 1; padding: 5px 1px; color: #888; border-right: 1px solid #e0e0e0; }
+  .tabs div:last-child { border-right: 0; }
+  .tabs div.on { color: #0068ff; font-weight: 700; background: #f2f7ff; }
+
+  /* blocks */
+  .card { border: 1px solid #bbb; padding: 6px 7px; margin-bottom: 6px; font-size: 11.5px; }
+  .card.hi { border: 2px solid #c0521c; background: #fff7f2; }
+  .card.tint { background: #f2f7ff; border-color: #9dbdf0; }
+  .card.gate { border: 2px solid #0068ff; background: #f2f7ff; }
+  .ttl { font-weight: 700; font-size: 11.5px; }
+  .mut { color: #777; font-size: 10.5px; }
+  .row {
+    display: flex; justify-content: space-between; gap: 6px;
+    padding: 4px 0; border-bottom: 1px solid #eee; font-size: 11px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .btn {
+    display: inline-block; border: 1px solid #0068ff; color: #0068ff;
+    padding: 3px 8px; font-size: 10.5px; margin: 3px 4px 0 0; border-radius: 3px;
+  }
+  .btn.pri { background: #0068ff; color: #fff; }
+  .btn.gh { border-color: #999; color: #555; }
+  .msg {
+    border: 1px solid #bbb; padding: 5px 7px; margin-bottom: 6px;
+    font-size: 11px; max-width: 90%;
+  }
+  .msg.me { margin-left: auto; background: #dcf0dc; }
+  .msg.bot { background: #f6f6f6; border-color: #888; }
+  .who { font-weight: 700; font-size: 10px; color: #555; }
+  .ph { background: #eee; height: 9px; margin: 4px 0; }
+  .bar-fill { height: 7px; background: #eee; margin-top: 4px; }
+  .bar-fill i { display: block; height: 7px; background: #6aa84f; }
+  .tag {
+    display: inline-block; border: 1px solid #999; padding: 0 4px;
+    font-size: 9px; color: #555; border-radius: 2px; margin-left: 3px;
+  }
+  .tag.ok { border-color: #4a8; color: #2a6; }
+  .tag.wait { border-color: #c99; color: #b60; }
+  .tag.err { border-color: #c33; color: #c33; }
+  .lock { color: #888; font-size: 9.5px; }
+
+  .notes {
+    background: #fff; border: 1px solid #ddd; border-left: 3px solid #c0521c;
+    padding: 10px 14px; margin: 14px 0 0; font-size: 12px;
+  }
+  .notes b { font-size: 11px; letter-spacing: .04em; color: #c0521c; }
+  .notes ul { margin: 6px 0 0; padding-left: 18px; }
+  .notes li { margin-bottom: 3px; }
+  .notes code {
+    background: #f0f0f0; padding: 0 4px; font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 10px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f0f0f0; font-size: 11px; }
+</style>
+
+</head><body><h1>ZINO Mini App — Wireframe theo user journey</h1>
+<p class="sub">Bản vẽ chức năng, không phải bản design. Mỗi journey đọc từ trái sang phải: màn chat → màn app → chat phản hồi.</p>
+
+<div class="legend">
+  <b>Ký hiệu</b>
+  <span><code>[ Nút ]</code> nút bấm</span>
+  <span><span class="lock">🔒</span> chỉ đọc</span>
+  <span><code>✎</code> sửa được trong app</span>
+  <span><code>↗</code> phải qua chat / Zino</span>
+  <span><span class="tag wait">chờ</span><span class="tag ok">xong</span><span class="tag err">lỗi</span> trạng thái mục</span>
+  <span>Khối <span style="background:#eee;padding:0 10px">xám</span> = placeholder</span>
+</div>
+
+<!-- ══════════════════════ J1 ══════════════════════ -->
+<h2>J1 · Mở chuyến — chat tạo ra sổ</h2>
+<p class="jsub">Trạng thái app: <b>MỚI</b> (chưa chốt gì). Mục tiêu: app không được trống trơn vô nghĩa, phải nói rõ đang chờ gì.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg"><span class="who">Minh</span><br>Nhóm 3 người, 3 triệu/người, 28–30/07, muốn gần biển</div>
+        <div class="msg"><span class="who">Lan</span><br>Khách sạn gần biển nhé</div>
+        <div class="msg"><span class="who">Tú</span><br>Chọn rẻ nhất đi</div>
+        <div class="msg me">@Zino lên kế hoạch giúp</div>
+      </div>
+    </div>
+    <p class="cap"><b>1.</b> Nhóm nêu nhu cầu rời rạc, gọi <code>@Zino</code></p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Đã mở sổ chuyến đi:<br>
+          <b>Vũng Tàu · 28–30/07 · 3 người</b><br>
+          Ngân sách 9.000.000đ<br>
+          <span class="mut">Mình đang tìm phương án khách sạn.</span>
+          <div><span class="btn pri">Mở sổ chuyến đi</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>2.</b> Zino tạo <code>trip</code> + ghim tin này. Nút mở app là đường vào chính</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="ttl">Vũng Tàu quẩy tới bến <span class="tag">Đang lên kế hoạch</span></div>
+          <div class="mut">28/07 → 30/07 · 3 người</div>
+          <div class="mut">0đ / 9.000.000đ</div>
+          <div class="bar-fill"><i style="width:0"></i></div>
+        </div>
+        <div class="card hi">
+          <div class="ttl">⏳ Chưa có gì để chốt</div>
+          <div class="mut">Zino đang tìm phương án khách sạn.
+            Xong sẽ hiện ở đây để nhóm chọn.</div>
+        </div>
+        <div class="card">
+          <div class="ttl">ZINO ĐÃ LÀM GÌ <span class="lock">🔒</span></div>
+          <div class="row">Mở sổ chuyến đi<span class="mut">23:20</span></div>
+          <div class="row" style="display:block">
+            <span class="mut">↳ từ tin của Minh: "3 người, 3 triệu/người…"</span>
+          </div>
+        </div>
+      </div>
+      <div class="tabs"><div class="on">Tổng quan</div><div>Lịch trình</div><div>Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>3.</b> App trạng thái MỚI — nói rõ đang chờ gì, không để trống</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J1</b>
+  <ul>
+    <li>Người gọi <code>@Zino</code> tạo chuyến → <code>member.vai_trò = người_tổ_chức</code>. Cho phép chỉ định thêm 1 người nữa.</li>
+    <li>Mở app <b>phải check</b> <code>zalo_user_id ∈ member(trip_id)</code>. Không phải thành viên → chặn, vì màn này hiện tiền.</li>
+    <li>Một nhóm chat chỉ có <b>một</b> <code>trip</code> ở trạng thái active.</li>
+    <li>Mỗi dòng nhật ký lưu <code>trích_tin_gốc</code> (text, hiện tại chỗ) — <b>không</b> làm deep link về message, chưa chắc Zalo cho.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ J2 ══════════════════════ -->
+<h2>J2 · Bàn ở chat, chốt ở app — màn hình quan trọng nhất</h2>
+<p class="jsub">Trạng thái app: <b>ĐANG CHỜ CHỐT</b>. Đây là chỗ duy nhất thể hiện Zino dung hoà ý muốn xung đột của nhiều người.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          2 phương án khách sạn, đều trong ngân sách:<br><br>
+          <b>A · Malibu</b> 3.6tr — cách Bãi Sau 400m<br>
+          <b>B · Seaside</b> 4.1tr — ngay mặt biển<br><br>
+          <span class="mut">Lan muốn gần biển, Tú ưu tiên giá.
+          A cân bằng hơn nhưng cả nhóm chọn nhé.</span>
+          <div><span class="btn pri">Bình chọn trong sổ</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>1.</b> Zino đề xuất kèm <b>lý do và trade-off</b>, không tự quyết</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="ttl">Vũng Tàu quẩy tới bến</div>
+          <div class="mut">0đ / 9.000.000đ</div>
+        </div>
+        <div class="card hi">
+          <div class="ttl">⚠ ĐANG CHỜ CHỐT · Chọn khách sạn</div>
+          <div class="row"><span><b>A · Malibu</b> 3.6tr<br><span class="mut">Lan, Tú đã chọn</span></span><span class="btn">Chọn</span></div>
+          <div class="row"><span><b>B · Seaside</b> 4.1tr<br><span class="mut">chưa ai chọn</span></span><span class="btn">Chọn</span></div>
+          <div class="mut" style="margin-top:5px">Còn <b>Minh</b> chưa bình chọn</div>
+          <div class="mut">↳ Zino nghiêng A: trong ngân sách, cách biển 400m</div>
+          <div><span class="btn">So sánh</span><span class="btn pri">Chốt A</span></div>
+          <div class="mut" style="margin-top:3px">Nút Chốt chỉ người tổ chức thấy</div>
+        </div>
+      </div>
+      <div class="tabs"><div class="on">Tổng quan</div><div>Lịch trình</div><div>Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>2.</b> Thẻ chờ chốt: ai chọn gì, <b>còn ai chưa chọn</b>, gợi ý của Zino</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Chốt phương án</span><span>✕</span></div>
+      <div class="body">
+        <div class="card gate">
+          <div class="ttl">Chốt "A · Malibu"?</div>
+          <div class="mut" style="margin-top:4px">
+            Sau khi chốt, Zino sẽ đi giữ chỗ.<br>
+            Giữ chỗ miễn phí, huỷ được trước 12h.<br>
+            <b>Chưa trừ tiền ở bước này.</b>
+          </div>
+          <div class="mut" style="margin-top:6px">Minh chưa bình chọn — vẫn chốt?</div>
+          <div><span class="btn pri">Chốt</span><span class="btn gh">Để sau</span></div>
+        </div>
+        <div class="card">
+          <div class="ttl">Nếu chốt ngược đa số</div>
+          <div class="mut">Nhật ký ghi: "Chốt bởi Đông, ngược đa số".
+          Zino báo lại trong nhóm.</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>3.</b> Sheet xác nhận — nói rõ chốt ≠ trừ tiền</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Nhóm đã chốt <b>Malibu</b> (Đông chốt, 2/3 phiếu).<br>
+          Mình đi giữ chỗ 2 đêm nhé.
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>4.</b> Chốt ở app → Zino báo lại nhóm ngay</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J2</b>
+  <ul>
+    <li>Bình chọn là <b>bấm nút tường minh trong app</b>. Không suy diễn từ reaction/tin nhắn trong chat — đó là bài NLU riêng, không kịp làm.</li>
+    <li><code>decision</code> phải <b>idempotent</b>: ai bấm Chốt trước thắng; người bấm sau thấy trạng thái đã chốt, không tạo bản ghi trùng.</li>
+    <li>Người tổ chức chốt được <b>kể cả khi chưa đủ phiếu hoặc ngược đa số</b> → set <code>decision.ngược_đa_số = true</code> và ghi nhật ký.</li>
+    <li>Chốt xong ghi <code>decision.kết_quả</code> + sinh <code>itinerary_item</code> tương ứng + push 1 tin vào nhóm.</li>
+    <li>Nếu hoà phiếu: không tự xử, chỉ hiện "đang hoà, chờ người tổ chức chốt".</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ J3 ══════════════════════ -->
+<h2>J3 · Zino thực thi và xin xác nhận thanh toán</h2>
+<p class="jsub">Trạng thái mục: <b>chờ → xong</b>. Chốt chặn thanh toán nằm ở chat, không nằm ở app.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="mut">Ngày 1 · 28/07</div>
+        <div class="card">
+          <div class="ttl">Khách sạn Malibu <span class="tag wait">đang giữ chỗ</span></div>
+          <div class="mut">2 đêm · 3.600.000đ (dự kiến)</div>
+          <div class="mut">↳ Zino đã liên hệ qua OA</div>
+        </div>
+        <div class="card">
+          <div class="ttl">Ngắm bình minh Bãi Sau <span class="tag ok">xong</span></div>
+          <div class="mut">05:15 · Bãi Sau ✎</div>
+        </div>
+        <div class="card">
+          <div class="ttl">Xe limousine <span class="tag err">lỗi</span></div>
+          <div class="mut">Hết chỗ giờ đó.
+            <span class="btn">↗ Nhờ Zino tìm lại</span></div>
+        </div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div class="on">Lịch trình</div><div>Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>1.</b> Mỗi mục Zino tạo có <b>3 trạng thái</b>. Lỗi cũng phải hiện, kèm đường xử lý</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Đã giữ 2 đêm Malibu — <b>3.600.000đ</b><br>
+          <span class="mut">Giữ chỗ miễn phí, huỷ được trước 12h ngày 27/07.</span><br><br>
+          Xác nhận thanh toán qua ZaloPay?
+          <div><span class="btn pri">Đồng ý</span><span class="btn gh">Để sau</span></div>
+          <div class="mut">Chỉ Đông (người tổ chức) bấm được</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>2.</b> <b>Chốt chặn:</b> Zino không tự thanh toán. Nút chỉ hiện với người tổ chức</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg me">Đồng ý</div>
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Xong. Đã thanh toán 3.600.000đ.<br>
+          Mã giao dịch <b>ZP-8842</b><br>
+          <span class="mut">Đã ghi vào sổ chi phí.</span>
+          <div><span class="btn">Xem chi phí</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>3.</b> Xong việc mới ghi <code>expense</code> kèm mã giao dịch</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="ttl">Khách sạn Malibu 2 đêm</div>
+          <div class="row"><span>Số tiền</span><span><b>3.600.000đ</b> <span class="lock">🔒</span></span></div>
+          <div class="row"><span>Người trả</span><span>Đông <span class="lock">🔒</span></span></div>
+          <div class="row"><span>Chia cho</span><span>3 người ✎</span></div>
+          <div class="row"><span>Mã GD</span><span>ZP-8842 <span class="lock">🔒</span></span></div>
+          <div class="mut" style="margin-top:5px">Khoản do Zino tạo — số tiền khoá vì
+            đây là giao dịch thật. Chỉ sửa được cách chia và ghi chú.</div>
+          <div><span class="btn">↗ Nhờ Zino huỷ / hoàn tiền</span></div>
+        </div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div>Lịch trình</div><div class="on">Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>4.</b> Quy tắc <b>sửa dữ liệu, không sửa giao dịch</b> thể hiện ngay trên UI</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J3</b>
+  <ul>
+    <li><code>expense.nguồn = zino</code> và có <code>mã_giao_dịch</code> → khoá <code>số_tiền</code>, <code>người_trả</code>. Chỉ mở <code>cách_chia</code>, ghi chú.</li>
+    <li>Giữ chỗ được phép làm trước xác nhận <b>chỉ khi</b> miễn phí và huỷ được. Phải hiện điều kiện huỷ trong tin nhắn.</li>
+    <li>Nút xác nhận thanh toán chỉ render cho <code>vai_trò = người_tổ_chức</code>.</li>
+    <li>Đặt / đổi / huỷ / thanh toán / hoàn tiền — <b>tất cả</b> đều cần xác nhận riêng. Gửi tin nhắn chưa phải là xác nhận.</li>
+    <li>Trong hackathon: thanh toán <b>mock hoàn toàn</b>, mã giao dịch sinh giả. Nói rõ khi present.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ J4 ══════════════════════ -->
+<h2>J4 · Trong chuyến — thêm khoản chi, app là vai chính</h2>
+<p class="jsub">Trạng thái app: <b>ĐANG ĐI</b>. Đây là lúc người dùng tự mở app, không cần Zino dẫn.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="mut">Còn 1.000.000đ / 9.000.000đ</div>
+          <div class="bar-fill"><i style="width:89%"></i></div>
+        </div>
+        <div class="card">
+          <div class="ttl">TIÊU VÀO ĐÂU <span class="lock">🔒</span></div>
+          <div class="row"><span>Chỗ ở</span><span>3.600.000đ · 45%</span></div>
+          <div class="row"><span>Di chuyển</span><span>2.400.000đ · 30%</span></div>
+          <div class="row"><span>Ăn uống</span><span>1.400.000đ · 17%</span></div>
+        </div>
+        <div class="card">
+          <div class="ttl">4 KHOẢN CHI</div>
+          <div class="row"><span>Hải sản Gành Hào<br><span class="mut">Tú trả · 28/07</span></span><span>1.400.000đ ✎</span></div>
+          <div class="row"><span>Khách sạn Malibu<br><span class="mut">Đông trả · 28/07</span></span><span>3.600.000đ <span class="lock">🔒</span></span></div>
+        </div>
+        <div><span class="btn pri">+ Thêm khoản chi</span></div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div>Lịch trình</div><div class="on">Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>1.</b> Khoản người dùng tạo có <code>✎</code>, khoản Zino tạo có <span class="lock">🔒</span></p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Thêm khoản chi</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="row"><span>Tên</span><span class="mut">Cà phê Bãi Trước</span></div>
+          <div class="row"><span>Số tiền</span><span class="mut">300.000</span></div>
+          <div class="row"><span>Loại</span><span class="mut">Ăn uống ▾</span></div>
+          <div class="row"><span>Ai trả</span><span class="mut">Linh ▾</span></div>
+          <div class="row"><span>Chia cho</span><span class="mut">☑ Đông ☑ Tú ☑ Linh</span></div>
+          <div class="row"><span>Ngày</span><span class="mut">29/07</span></div>
+        </div>
+        <div><span class="btn pri">Lưu</span><span class="btn gh">Huỷ</span></div>
+        <div class="mut" style="margin-top:6px">Form phẳng, không wizard. Ai cũng thêm được.</div>
+      </div>
+    </div>
+    <p class="cap"><b>2.</b> Form tối giản — 6 trường, không cần chụp hoá đơn</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card tint">
+          <div class="ttl">CHIA TIỀN · 2 giao dịch là xong</div>
+          <div class="row"><span>Linh → Đông</span><span><b>2.066.333đ</b> ☐ đã trả</span></div>
+          <div class="row"><span>Tú → Đông</span><span><b>1.267.000đ</b> ☐ đã trả</span></div>
+          <div class="mut" style="margin-top:4px">Zino tính đường chia ngắn nhất</div>
+        </div>
+        <div class="card">
+          <div class="ttl">SỐ DƯ TỪNG NGƯỜI <span class="lock">🔒</span></div>
+          <div class="row"><span>Đông<br><span class="mut">đã trả 6.0tr · chịu 2.67tr</span></span><span style="color:#2a6">+3.333.333đ</span></div>
+          <div class="row"><span>Tú<br><span class="mut">đã trả 1.4tr · chịu 2.67tr</span></span><span style="color:#c33">−1.267.000đ</span></div>
+        </div>
+        <div class="mut">Đông vừa sửa khoản này — <span class="btn gh">Tải lại</span></div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div>Lịch trình</div><div class="on">Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>3.</b> Chia tiền tính lại tức thì. Toast khi có người khác vừa sửa</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Cập nhật sổ chi phí:<br>
+          • Linh thêm "Cà phê Bãi Trước" 300k, chia đều 3<br>
+          • Còn <b>1.000.000đ</b> trong ngân sách<br>
+          <span class="mut">Cần 2 giao dịch là chia xong.</span>
+          <div><span class="btn">Xem chi phí</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>4.</b> Zino gộp thành <b>một</b> tin, không nhắc từng thao tác</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J4</b>
+  <ul>
+    <li><code>settlement</code> tính lại mỗi lần mở, nhưng <code>đã_trả</code> phải <b>lưu</b> (kèm <code>tick_bởi</code>, <code>tick_lúc</code>).</li>
+    <li>Mỗi mutation ghi <code>updated_by</code> + <code>updated_at</code> và một dòng <code>agent_log</code> với <code>actor_type = user</code>.</li>
+    <li>Hai người sửa cùng lúc: <b>ghi sau thắng</b> + toast "X vừa sửa, tải lại". Không cần khoá bản ghi.</li>
+    <li>Thông báo về nhóm: <b>gộp theo lô</b> (ví dụ 60 giây một lần), không push mỗi lần sửa.</li>
+    <li>Quyền: thành viên chỉ sửa được khoản <b>mình tạo</b>; người tổ chức sửa được mọi khoản.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ J5 ══════════════════════ -->
+<h2>J5 · Việc app không tự làm — đẩy về Zino</h2>
+<p class="jsub">Mọi việc cần tìm kiếm thật, gọi đối tác, hoặc tiêu tiền đều đi đường này.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="mut">Ngày 2 · 29/07</div>
+        <div class="card"><div class="ttl">16:00 Cà phê view biển</div><div class="mut">Bãi Trước ✎</div></div>
+        <div class="card" style="border-style:dashed">
+          <div class="ttl mut">Buổi tối chưa có gì</div>
+          <div><span class="btn">↗ Nhờ Zino tìm quán hải sản</span></div>
+        </div>
+        <div class="mut" style="margin-top:8px">
+          App không tự gọi API tìm kiếm. Bấm nút này chỉ
+          mở chat với câu đã soạn sẵn.</div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div class="on">Lịch trình</div><div>Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>1.</b> Chỗ trống trong lịch là <b>lối vào</b> cho Zino, không phải khoảng trắng</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div style="min-height:200px"></div>
+        <div class="card" style="border-color:#0068ff">
+          <div class="mut">Ô nhập tin — đã soạn sẵn, <b>chưa gửi</b></div>
+          <div style="margin-top:4px">@Zino tìm quán hải sản gần Bãi Sau
+            cho tối 29/07, 3 người, tầm 500k</div>
+          <div><span class="btn pri">Gửi</span></div>
+        </div>
+        <div class="mut" style="margin-top:5px">Quyền bấm Gửi thuộc về người dùng</div>
+      </div>
+    </div>
+    <p class="cap"><b>2.</b> App prefill câu hỏi, <b>không</b> tự gửi</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg me">@Zino tìm quán hải sản gần Bãi Sau…</div>
+        <div class="msg bot"><span class="who">Zino</span><br>
+          3 quán trong tầm giá:<br>
+          <b>A</b> Gành Hào 450k · 1.2km<br>
+          <b>B</b> Cây Bàng 520k · 800m<br>
+          <b>C</b> Bãi Sau BBQ 400k · 300m<br>
+          <span class="mut">C gần nhất và rẻ nhất.</span>
+          <div><span class="btn pri">Bình chọn trong sổ</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>3.</b> Quay lại vòng J2 — về app để chốt</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J5</b>
+  <ul>
+    <li>Nút <code>↗ Nhờ Zino</code> = mở chat nhóm + prefill text. Cần verify Zalo Mini App có API này; nếu không thì <b>copy câu vào clipboard</b> + hướng dẫn 1 dòng.</li>
+    <li>App <b>không</b> gọi trực tiếp bất kỳ API bên ngoài nào. Mọi việc ra ngoài đi qua Zino.</li>
+    <li>Các nút Nhờ Zino cần có: tìm thêm mục · đặt/đổi/huỷ · liên hệ đối tác · đổi ngày hoặc số người · nhắc trả tiền.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ J6 ══════════════════════ -->
+<h2>J6 · Sau chuyến — sổ ở lại</h2>
+<p class="jsub">Trạng thái app: <b>ĐÃ XONG</b>. Tab Chi phí ở trạng thái cuối chính là trang tổng kết, không làm trang riêng.</p>
+
+<div class="flow">
+  <div class="step">
+    <div class="scr">
+      <div class="bar app"><span>‹ Zino</span><span>✕</span></div>
+      <div class="body">
+        <div class="card">
+          <div class="ttl">Vũng Tàu quẩy tới bến <span class="tag ok">Đã xong</span></div>
+          <div class="mut">28–30/07 · 3 người · 7 hoạt động</div>
+          <div class="mut">Đã tiêu <b>8.300.000đ</b> / 9.000.000đ</div>
+        </div>
+        <div class="card tint">
+          <div class="ttl">CÒN LẠI 1 GIAO DỊCH</div>
+          <div class="row"><span>Linh → Đông</span><span><b>2.066.333đ</b> ☐</span></div>
+          <div class="row"><span>Tú → Đông</span><span class="mut">1.267.000đ ☑ đã trả</span></div>
+          <div><span class="btn">↗ Nhờ Zino nhắc Linh</span></div>
+        </div>
+        <div class="card">
+          <div class="ttl">NHÓM ĐÃ CHỐT GÌ <span class="lock">🔒</span></div>
+          <div class="row" style="display:block">Khách sạn Malibu
+            <span class="mut">— Đông chốt 28/07, 2/3 phiếu, vì trong ngân sách và gần biển</span></div>
+          <div class="row" style="display:block">Quán tối Bãi Sau BBQ
+            <span class="mut">— Lan chốt 29/07, 3/3 phiếu</span></div>
+        </div>
+      </div>
+      <div class="tabs"><div>Tổng quan</div><div>Lịch trình</div><div class="on">Chi phí</div><div>Kỷ niệm</div></div>
+    </div>
+    <p class="cap"><b>1.</b> Tổng kết + <b>lịch sử chốt kèm lý do</b> — thứ chat không giữ được</p>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="scr">
+      <div class="bar chat"><span>‹ QQ za.hackathon</span><span>3 người</span></div>
+      <div class="body">
+        <div class="msg bot"><span class="who">Zino</span><br>
+          Chuyến Vũng Tàu đã khép lại 🎉<br>
+          Tiêu 8.300.000đ, dưới ngân sách 700k.<br><br>
+          Còn <b>Linh</b> chuyển 2.066.333đ cho Đông là xong.
+          <div><span class="btn">Mở sổ chuyến đi</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>2.</b> Zino nhắc dựa trên <code>settlement</code> chưa tick</p>
+  </div>
+</div>
+
+<div class="notes">
+  <b>DEV NOTES — J6</b>
+  <ul>
+    <li>Không làm trang tổng kết riêng — đổi <code>trip.trạng_thái = đã_xong</code> rồi render lại tab Chi phí.</li>
+    <li>Nhắc trả tiền lấy từ <code>settlement</code> có <code>đã_trả = false</code>.</li>
+    <li>Sổ giữ vĩnh viễn. <b>Chưa</b> làm phần đọc lại sổ cũ để học sở thích nhóm — đừng hứa khi present.</li>
+    <li>Người đã rời nhóm mà còn nợ: giữ bản ghi, hiện "đã rời, còn nợ". Không xoá khỏi <code>settlement</code>.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════ STATES ══════════════════════ -->
+<h2>Bảng trạng thái — dev đọc cái này là đủ</h2>
+
+<table>
+  <tbody><tr><th style="width:150px">Đối tượng</th><th style="width:220px">Trạng thái</th><th>Màn hình hiện gì</th></tr>
+  <tr>
+    <td><code>trip.trạng_thái</code></td>
+    <td>đang_lên_kế_hoạch</td>
+    <td>Tổng quan: thẻ "Chưa có gì để chốt". Lịch trình và Chi phí trống, có dòng giải thích đang chờ Zino</td>
+  </tr>
+  <tr><td></td><td>đang_đi</td><td>Tổng quan hiện lịch hôm nay. Chi phí là tab dùng nhiều nhất</td></tr>
+  <tr><td></td><td>đã_xong</td><td>Chi phí thành trang tổng kết + lịch sử chốt. Ẩn nút thêm mục lịch trình</td></tr>
+  <tr>
+    <td><code>decision</code></td>
+    <td>đang_chờ_chốt</td>
+    <td>Thẻ cam ở Tổng quan, hiện phiếu và <b>ai chưa bình chọn</b>. Nút Chốt chỉ người tổ chức</td>
+  </tr>
+  <tr><td></td><td>hoà_phiếu</td><td>Vẫn thẻ cam, thêm dòng "đang hoà, chờ người tổ chức chốt". Không tự xử</td></tr>
+  <tr><td></td><td>đã_chốt</td><td>Thẻ biến thành 1 dòng trong "Nhóm đã chốt gì", kèm ai chốt và lý do</td></tr>
+  <tr>
+    <td><code>itinerary_item</code><br><code>.trạng_thái</code></td>
+    <td>chờ (Zino đang làm)</td>
+    <td>Nhãn <span class="tag wait">đang giữ chỗ</span>, chi phí ghi "dự kiến"</td>
+  </tr>
+  <tr><td></td><td>xong</td><td>Nhãn <span class="tag ok">xong</span>, có nhãn "Zino đã liên hệ qua OA" nếu có</td></tr>
+  <tr><td></td><td>lỗi</td><td>Nhãn <span class="tag err">lỗi</span> + lý do ngắn + nút <code>↗ Nhờ Zino tìm lại</code>. <b>Không được ẩn</b></td></tr>
+  <tr>
+    <td><code>expense.nguồn</code></td>
+    <td>người_dùng</td>
+    <td>Sửa được số tiền, người trả, cách chia — nếu là người tạo hoặc người tổ chức</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>zino + có mã_giao_dịch</td>
+    <td>Số tiền và người trả <b>khoá</b> <span class="lock">🔒</span>. Chỉ sửa cách chia và ghi chú. Có nút <code>↗ Nhờ Zino huỷ / hoàn tiền</code></td>
+  </tr>
+  <tr>
+    <td><code>settlement.đã_trả</code></td>
+    <td>false / true</td>
+    <td>Checkbox. Tick được nếu là người trả, người nhận, hoặc người tổ chức. Lưu <code>tick_bởi</code></td>
+  </tr>
+  <tr>
+    <td>Ngân sách</td>
+    <td>vượt</td>
+    <td>Thanh đổi màu đỏ + 1 dòng "vượt X đ". P2, chưa cần cho demo</td>
+  </tr>
+</tbody></table>
+
+<h2>Ba thứ nếu cắt hết vẫn phải còn</h2>
+<div class="notes">
+  <ul style="margin-top:0">
+    <li><b>Thẻ Đang chờ chốt (J2)</b> — chỗ duy nhất thể hiện Zino dung hoà ý muốn xung đột của nhóm</li>
+    <li><b>Dòng lý do</b> trên mục lịch trình và nhật ký — thứ biến app từ danh sách thành bằng chứng agent có suy nghĩ</li>
+    <li><b>Sửa được chi phí + chia tiền (J4)</b> — lý do người dùng thật sự mở app</li>
+  </ul>
+</div>
+</body></html>
