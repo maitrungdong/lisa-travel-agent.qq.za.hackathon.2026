@@ -10,6 +10,7 @@ import {
   Wallet
 } from "lucide-react";
 import { api, recapPageUrl, type Activity } from "../lib/api";
+import { AUTH_ENABLED, DEBUG_UI } from "../lib/flags";
 import { session, type MeResponse } from "../lib/session";
 import { fetchZaloUser, openExternal, type ZaloUser } from "../lib/zalo";
 import { useRecap } from "../lib/use-trip";
@@ -93,15 +94,17 @@ export default function HomePage() {
       <p className="mt-2 flex items-center gap-1.5 text-sm opacity-90">
         <Sparkles size={16} /> Nhắn “@Zino” trong nhóm Zalo để lên kế hoạch
       </p>
-      {/* TẠM — lối vào màn đo danh tính. Đặt trong header vì header hiện ở MỌI
-          nhánh của Home (đang tải / lỗi / rỗng), còn trong webview Zalo thì
-          không gõ URL tay được. Xoá cùng /debug sau khi đo xong. */}
-      <Link
-        to="/debug"
-        className="absolute right-3 top-3 rounded-full bg-white/15 px-2 py-1 text-[11px] font-medium"
-      >
-        🔧 debug
-      </Link>
+      {/* Lối vào màn đo danh tính. Đặt trong header vì header hiện ở MỌI nhánh
+          của Home (đang tải / lỗi / rỗng), còn trong webview Zalo thì không gõ
+          URL tay được. Chỉ hiện khi VITE_DEBUG_UI=true. */}
+      {DEBUG_UI && (
+        <Link
+          to="/debug"
+          className="absolute right-3 top-3 rounded-full bg-white/15 px-2 py-1 text-[11px] font-medium"
+        >
+          🔧 debug
+        </Link>
+      )}
     </header>
   );
 
