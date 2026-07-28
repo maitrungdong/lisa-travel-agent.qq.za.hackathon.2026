@@ -13,6 +13,7 @@ import {
   photos,
   trips
 } from "../db/schema";
+import { buildRecap, renderRecapHtml, type RecapPayload } from "./recap";
 import type { CreateActivity, CreateEvent, CreateExpense, CreateTrip } from "./trips.dto";
 
 @Injectable()
@@ -153,5 +154,23 @@ export class TripsService {
       this.settle(tripId)
     ]);
     return { trip, events: ev, expenses: ex, photos: ph, notes: nt, members: mb, activities: ac, settlement: st };
+  }
+
+  /**
+   * Payload trang tổng kết. Dùng CHUNG cho 3 chỗ: trang web `/trip/:id/`,
+   * Mini App, và job recap của worker — nên số liệu không thể lệch nhau.
+   */
+  async recap(tripId: number): Promise<RecapPayload> {
+    const full = await this.fullTrip(tripId);
+    return buildRecap(full);
+  }
+
+  /** HTML trang tổng kết, dựng ngay khi có request (không cần worker chạy trước). */
+  async recapHtml(tripId: number): Promise<string> {
+    const data = await this.recap(tripId);
+    const base = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+    return renderRecapHtml(data, {
+      publicUrl: base ? `${base}/trip/${tripId}/` : null
+    });
   }
 }

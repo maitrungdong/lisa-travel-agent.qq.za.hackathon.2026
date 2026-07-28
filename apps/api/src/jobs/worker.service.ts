@@ -3,11 +3,12 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import { and, eq, lte } from "drizzle-orm";
 import { AgentService } from "../agent/agent.service";
 import { REFLECTION_PROMPT } from "../agent/prompt";
-import { loadTripState, type ToolContext } from "../agent/tools";
 import { DB, type Database } from "../db/database.module";
 import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
 import { MerchantAgentService } from "../oa/merchant-agent.service";
+import { renderRecapHtml, type RecapPayload } from "../trips/recap";
+import { TripsService } from "../trips/trips.service";
 import { ConversationService } from "../zalo/conversation.service";
 import { ZaloClient } from "../zalo/zalo.client";
 import { JobsService, type Job } from "./jobs.service";
@@ -35,7 +36,8 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly zalo: ZaloClient,
     private readonly conversations: ConversationService,
     private readonly media: MediaService,
-    private readonly merchant: MerchantAgentService
+    private readonly merchant: MerchantAgentService,
+    private readonly trips: TripsService
   ) {}
 
   onApplicationBootstrap(): void {
@@ -202,7 +204,15 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     await this.conversations.recordOutbound(conversationId, plan);
   }
 
-  /** Dựng trang HTML tổng kết chuyến đi từ dữ liệu đã thu thập. */
+  /**
+   * Dựng trang HTML tổng kết chuyến đi.
+   *
+   * Bố cục và MỌI con số do `renderRecapHtml` dựng bằng code — tất định, có
+   * unit test, khớp từng đồng với màn Chi phí của Mini App. Claude chỉ viết
+   * một đoạn lời tựa 2–3 câu; model lỗi hay hết quota thì bỏ đoạn đó, trang
+   * vẫn ra đầy đủ. Trước đây cả trang do LLM sinh: mỗi lần một kiểu, và một
+   * cú timeout giữa demo là mất trắng phần "trang tổng kết".
+   */
   private async handleRecap(job: Job): Promise<void> {
     const { conversationId, zaloChatId, tripId, tone } = job.payload as {
       conversationId: number;
@@ -211,36 +221,13 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       tone: string;
     };
 
-    const ctx = { db: this.db, tripId } as unknown as ToolContext;
-    const state = await loadTripState(ctx);
-    if (!state) return;
-
-    const res = await this.anthropic.messages.create({
-      model: process.env.ZINO_RECAP_MODEL ?? "claude-sonnet-5",
-      max_tokens: 8000,
-      system:
-        "Bạn dựng trang web tổng kết chuyến đi. Trả về DUY NHẤT một file HTML hoàn chỉnh, " +
-        "self-contained (CSS inline trong <style>, không CDN, không JS ngoài). " +
-        "Mobile-first, đẹp, ấm áp, tiếng Việt. Gồm: hero tên chuyến + ngày, timeline lịch trình, " +
-        "gallery ảnh (dùng đúng URL được cung cấp, thẻ <img> loading=lazy), " +
-        "bảng chi tiêu tổng kết, các ghi chú/kỷ niệm. " +
-        "KHÔNG bọc trong ```html. Bắt đầu bằng <!DOCTYPE html>.",
-      messages: [
-        {
-          role: "user",
-          content: `Giọng điệu: ${tone}\n\nDữ liệu chuyến đi:\n${JSON.stringify(state, null, 2)}`
-        }
-      ]
+    const data = await this.trips.recap(tripId);
+    const intro = await this.writeRecapIntro(data, tone);
+    const base = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+    const html = renderRecapHtml(data, {
+      intro,
+      publicUrl: base ? `${base}/trip/${tripId}/` : null
     });
-
-    let html = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
-
-    html = html.replace(/^```html?\s*/i, "").replace(/```\s*$/, "");
-    if (!html.toLowerCase().includes("<!doctype")) html = `<!DOCTYPE html>\n${html}`;
 
     const url = await this.media.writeRecap(tripId, html);
 
@@ -254,6 +241,50 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     const msg = `🎉 Trang tổng kết chuyến đi xong rồi nè!\n\n${url}\n\nGửi link này cho cả nhóm cùng xem lại nhé 💛`;
     await this.zalo.sendRaw(zaloChatId, msg);
     await this.conversations.recordOutbound(conversationId, msg);
+  }
+
+  /**
+   * Lời tựa cho trang tổng kết — phần DUY NHẤT của trang do LLM viết.
+   * Lỗi gì cũng nuốt và trả null: thiếu lời tựa thì trang vẫn đủ ý, còn ném
+   * lỗi ra thì job fail và cả trang tổng kết biến mất.
+   */
+  private async writeRecapIntro(data: RecapPayload, tone: string): Promise<string | null> {
+    try {
+      const res = await this.anthropic.messages.create({
+        model: process.env.ZINO_RECAP_MODEL ?? "claude-sonnet-5",
+        max_tokens: 300,
+        system:
+          "Bạn là Zino, trợ lý của nhóm bạn thân. Viết lời tựa cho trang tổng kết chuyến đi: " +
+          "2–3 câu tiếng Việt, ấm áp, gợi lại kỷ niệm cụ thể có trong dữ liệu. " +
+          "Trả về DUY NHẤT đoạn văn, không markdown, không tiêu đề, không emoji quá 1 cái.",
+        messages: [
+          {
+            role: "user",
+            content: `Giọng điệu: ${tone}\n\nDữ liệu chuyến đi:\n${JSON.stringify(
+              {
+                trip: data.trip,
+                stats: data.stats,
+                days: data.days,
+                notes: data.notes.slice(0, 8),
+                photoCaptions: data.photos.map((p) => p.caption).filter(Boolean).slice(0, 8)
+              },
+              null,
+              2
+            )}`
+          }
+        ]
+      });
+
+      const text = res.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("")
+        .trim();
+      return text || null;
+    } catch (err) {
+      this.log.warn(`Không viết được lời tựa recap: ${String(err)}`);
+      return null;
+    }
   }
 
   /**

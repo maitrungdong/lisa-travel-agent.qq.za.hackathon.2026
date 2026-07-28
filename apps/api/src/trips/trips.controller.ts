@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards
+  BadRequestException, Body, Controller, Get, Header, Param, ParseIntPipe, Post, Query, UseGuards
 } from "@nestjs/common";
 import type { ZodType } from "zod";
 import { AgentKeyGuard } from "../common/agent-key.guard";
@@ -95,6 +95,26 @@ export class TripsController {
   @Get(":id/settle")
   settle(@Param("id", ParseIntPipe) id: number) {
     return this.trips.settle(id);
+  }
+
+  /** Dữ liệu trang tổng kết: lịch trình gom theo ngày, chi tiêu theo hạng mục, chia tiền. */
+  @Get(":id/recap")
+  recap(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.recap(id);
+  }
+
+  /**
+   * Trang tổng kết dạng HTML, dựng tại chỗ.
+   *
+   * nginx trỏ `/trip/:id/` vào file tĩnh worker ghi ra (`/opt/zino/recap`).
+   * Route này là đường DỰ PHÒNG: nếu job recap chưa chạy — hoặc chạy hỏng
+   * giữa lúc demo — vẫn còn `/api/trips/:id/recap.html` mở ra là có trang.
+   */
+  @Get(":id/recap.html")
+  @Header("Content-Type", "text/html; charset=utf-8")
+  @Header("Cache-Control", "no-store")
+  recapHtml(@Param("id", ParseIntPipe) id: number) {
+    return this.trips.recapHtml(id);
   }
 }
 
