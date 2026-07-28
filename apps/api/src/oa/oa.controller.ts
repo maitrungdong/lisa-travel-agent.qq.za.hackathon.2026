@@ -174,6 +174,43 @@ export class OaController {
     await this.jobs.enqueue("merchant_reply", { leadId: lead.id }, { dedupeKey: `oa:${ev.oaId}` });
   }
 
+  /**
+   * Chẩn đoán cấu hình — mở bằng trình duyệt để biết còn thiếu gì.
+   * KHÔNG lộ giá trị secret, chỉ báo có/không và in ra URL cần khai trên Zalo.
+   */
+  @Get("status")
+  async status() {
+    const base = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+    const connected = await this.db
+      .select({ id: partnerOas.id })
+      .from(partnerOas)
+      .where(eq(partnerOas.connected, true));
+
+    const missing: string[] = [];
+    if (!process.env.ZALO_APP_ID) missing.push("ZALO_APP_ID");
+    if (!process.env.ZALO_APP_SECRET) missing.push("ZALO_APP_SECRET");
+    if (!base) missing.push("PUBLIC_BASE_URL");
+
+    return {
+      ready: missing.length === 0,
+      missingEnv: missing,
+      // Ba URL này phải khai ĐÚNG TỪNG KÝ TỰ trên developers.zalo.me
+      urlsToRegister: {
+        redirectUri: `${base}/oa/callback`,
+        webhookUrl: `${base}/oa/webhook`,
+        startHere: `${base}/oa/connect`
+      },
+      signatureCheck: process.env.ZALO_OA_SECRET
+        ? "bật (ZALO_OA_SECRET đã cấu hình)"
+        : "TẮT — mọi webhook đều được chấp nhận, chỉ nên vậy khi đang dev",
+      connectedPartners: connected.length,
+      hint:
+        missing.length > 0
+          ? `Thiếu ${missing.join(", ")} trong /opt/lisa/.env → thêm rồi 'docker compose up -d'`
+          : "Cấu hình đủ. Mở startHere bằng tài khoản quản trị OA để uỷ quyền."
+    };
+  }
+
   /** Danh sách OA trong mạng lưới — Mini App và trang dashboard cùng dùng. */
   @Get("network")
   async network() {
