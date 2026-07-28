@@ -1,59 +1,79 @@
-import { useEffect, useState } from "react";
-import { Images, NotebookPen } from "lucide-react";
-import { api, resolveActiveTrip, type Note, type Photo } from "../lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, Images, NotebookPen, X } from "lucide-react";
+import { useRecap } from "../lib/use-trip";
+import { TripHeader } from "../components/trip-header";
 import { Card, CardContent } from "../components/ui/card";
+import { EmptyState, ErrorState, SectionTitle, SkeletonList } from "../components/states";
 
 /**
  * Kỷ niệm — ảnh và nhật ký Zino gom được trong chuyến đi.
+ *
  * Ảnh do Zino tải về từ Zalo rồi nginx serve lại tại {PUBLIC_BASE_URL}/media/...
- * (photo_url gốc của Zalo là URL tạm, không dùng lại được).
+ * (photo_url gốc của Zalo là URL tạm, hết hạn là ảnh vỡ hết).
  */
 export default function GalleryPage() {
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [zoom, setZoom] = useState<Photo | null>(null);
+  const { data, loading, error, isEmpty, reload } = useRecap();
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
 
+  const photos = data?.photos ?? [];
+  const total = photos.length;
+
+  const step = useCallback(
+    (delta: number) => {
+      setZoomIndex((i) => (i === null || total === 0 ? i : (i + delta + total) % total));
+    },
+    [total]
+  );
+
+  // Điều hướng bằng phím khi demo trên desktop; trên điện thoại thì bấm mũi tên.
   useEffect(() => {
-    resolveActiveTrip()
-      .then((id) =>
-        id ? Promise.all([api.photos(id), api.notes(id)]) : ([[], []] as [Photo[], Note[]])
-      )
-      .then(([p, n]) => {
-        setPhotos(p);
-        setNotes(n);
-      })
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
-  }, []);
+    if (zoomIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomIndex(null);
+      if (e.key === "ArrowLeft") step(-1);
+      if (e.key === "ArrowRight") step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomIndex, step]);
+
+  if (loading) return <SkeletonList rows={3} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (isEmpty || !data) {
+    return (
+      <EmptyState
+        icon={<Images size={32} />}
+        title="Chưa có chuyến đi nào"
+        hint="Kỷ niệm sẽ hiện ở đây sau khi nhóm có chuyến đi đầu tiên."
+      />
+    );
+  }
+
+  const { trip, notes } = data;
+  const zoom = zoomIndex === null ? null : photos[zoomIndex];
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-lg font-bold">Kỷ niệm</h1>
+    <div className="space-y-4">
+      <TripHeader trip={trip} />
 
-      {loading && <p className="py-8 text-center text-sm text-muted-foreground">Đang tải…</p>}
-
-      {!loading && photos.length === 0 && notes.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-            <Images size={32} />
-            <p className="text-sm">
-              Gửi ảnh vào nhóm Zalo, Zino sẽ tự gom về đây kèm chú thích.
-            </p>
-          </CardContent>
-        </Card>
+      {photos.length === 0 && notes.length === 0 && (
+        <EmptyState
+          icon={<Images size={32} />}
+          title="Chưa có kỷ niệm nào"
+          hint="Gửi ảnh vào nhóm Zalo, Zino sẽ tự gom về đây kèm chú thích."
+        />
       )}
 
       {photos.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">{photos.length} ảnh</h2>
+          <SectionTitle>{photos.length} ảnh</SectionTitle>
           <div className="grid grid-cols-2 gap-2">
-            {photos.map((p) => (
+            {photos.map((p, i) => (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setZoom(p)}
-                className="overflow-hidden rounded-xl bg-muted text-left"
+                onClick={() => setZoomIndex(i)}
+                className="overflow-hidden rounded-xl bg-muted text-left active:opacity-80"
               >
                 <img
                   src={p.url}
@@ -72,9 +92,11 @@ export default function GalleryPage() {
 
       {notes.length > 0 && (
         <section className="space-y-2">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <NotebookPen size={14} /> Nhật ký
-          </h2>
+          <SectionTitle>
+            <span className="flex items-center gap-1.5">
+              <NotebookPen size={14} /> Nhật ký
+            </span>
+          </SectionTitle>
           {notes.map((n) => (
             <Card key={n.id}>
               <CardContent className="space-y-1 py-3">
@@ -88,17 +110,56 @@ export default function GalleryPage() {
         </section>
       )}
 
-      {/* Xem ảnh phóng to — bấm nền để đóng */}
+      {/* Xem ảnh phóng to — lướt qua lại được, khỏi thoát ra vào từng tấm */}
       {zoom && (
-        <button
-          type="button"
-          onClick={() => setZoom(null)}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/90 p-4"
-        >
-          <img src={zoom.url} alt={zoom.caption ?? ""} className="max-h-[75vh] w-auto rounded-lg" />
-          {zoom.caption && <p className="text-center text-sm text-white/90">{zoom.caption}</p>}
-        </button>
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/95">
+          <div className="flex items-center justify-between p-3 text-white/80">
+            <span className="text-sm">
+              {(zoomIndex ?? 0) + 1}/{total}
+            </span>
+            <button type="button" onClick={() => setZoomIndex(null)} aria-label="Đóng">
+              <X size={22} />
+            </button>
+          </div>
+
+          <div className="flex flex-1 items-center justify-center gap-2 px-2">
+            {total > 1 && (
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                aria-label="Ảnh trước"
+                className="shrink-0 rounded-full bg-white/10 p-2 text-white active:bg-white/20"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            <img
+              src={zoom.url}
+              alt={zoom.caption ?? ""}
+              className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain"
+            />
+            {total > 1 && (
+              <button
+                type="button"
+                onClick={() => step(1)}
+                aria-label="Ảnh sau"
+                className="shrink-0 rounded-full bg-white/10 p-2 text-white active:bg-white/20"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
+          </div>
+
+          <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-center">
+            {zoom.caption && <p className="text-sm text-white/90">{zoom.caption}</p>}
+            {zoom.uploaderName && (
+              <p className="mt-1 text-xs text-white/50">{zoom.uploaderName} gửi</p>
+            )}
+          </div>
+        </div>
       )}
+
+      <div className="pb-2" />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquareQuote } from "lucide-react";
-import { api, resolveActiveTrip, type FullTrip, type Partner } from "../lib/api";
+import { MessageSquareQuote, Store } from "lucide-react";
+import { api, type Partner } from "../lib/api";
+import { useRecap } from "../lib/use-trip";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { EmptyState, SkeletonList } from "../components/states";
 
 const CATEGORIES = [
   { key: "", label: "Tất cả" },
@@ -23,18 +25,11 @@ const CATEGORIES = [
 export default function PartnersPage() {
   const navigate = useNavigate();
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [trip, setTrip] = useState<FullTrip | null>(null);
+  const { data: trip } = useRecap();
   const [category, setCategory] = useState<string>("");
   const [loading, setLoading] = useState(true);
   /** true = không có đối tác ở điểm đến, đang hiện toàn mạng lưới */
   const [fellBack, setFellBack] = useState(false);
-
-  useEffect(() => {
-    resolveActiveTrip()
-      .then((id) => (id ? api.full(id) : null))
-      .then(setTrip)
-      .catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +78,7 @@ export default function PartnersPage() {
       const { destination, startDate, endDate, budgetPerPerson } = trip.trip;
       const d1 = new Date(startDate).toLocaleDateString("vi-VN");
       const d2 = new Date(endDate).toLocaleDateString("vi-VN");
-      const people = trip.members.length || 2;
+      const people = trip.stats.memberCount || 2;
       const budget = budgetPerPerson
         ? `\nNgân sách nhóm mình khoảng ${budgetPerPerson.toLocaleString("vi-VN")}đ/người.`
         : "";
@@ -144,14 +139,14 @@ Cảm ơn shop nhiều ạ!`;
         ))}
       </div>
 
-      {loading && <p className="py-8 text-center text-sm text-muted-foreground">Đang tải…</p>}
+      {loading && <SkeletonList rows={3} />}
 
       {!loading && partners.length === 0 && (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Chưa có đối tác nào ở khu vực này.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<Store size={32} />}
+          title="Chưa có đối tác nào ở khu vực này"
+          hint="Zalo không có API tìm OA — danh bạ này do team tự dựng, đang mở rộng dần."
+        />
       )}
 
       <div className="space-y-2">

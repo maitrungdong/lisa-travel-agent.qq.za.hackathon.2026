@@ -1,6 +1,6 @@
 // Wrapper quanh zmp-sdk: gọi được cả trong Zalo lẫn trình duyệt thường
 // (dev trên desktop không có bridge native → fallback, không crash).
-import { getUserInfo, openChat } from "zmp-sdk/apis";
+import { getUserInfo, openChat, openWebview } from "zmp-sdk/apis";
 
 export interface ZaloUser {
   id: string;
@@ -27,6 +27,21 @@ export async function fetchZaloUser(): Promise<ZaloUser | null> {
  * Cần zmp-sdk >= 2.5.3. Ngoài môi trường Zalo (dev trên desktop) sẽ trả lỗi —
  * gọi ở đây trả về kết quả có kiểu thay vì ném exception, để UI tự lo fallback.
  */
+/**
+ * Mở link ngoài (trang tổng kết chuyến đi).
+ *
+ * Trong Zalo phải dùng `openWebview` — thẻ <a target="_blank"> trong webview
+ * của Mini App không mở được gì cả, bấm xong không có phản ứng nào. Ngoài Zalo
+ * (dev trên desktop) thì rơi về window.open để vẫn thử được.
+ */
+export async function openExternal(url: string): Promise<void> {
+  try {
+    await openWebview({ url });
+  } catch {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
 export async function openPartnerChat(
   oaId: string,
   message: string

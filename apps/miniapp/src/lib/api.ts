@@ -113,9 +113,69 @@ export interface FullTrip {
   settlement: Settlement;
 }
 
+/* ------------------------------------------------------------------ *
+ * Trang tổng kết — dữ liệu đã được server gom sẵn (theo ngày, theo
+ * hạng mục). Cùng payload với trang web /trip/:id/ nên hai bên không
+ * thể lệch số: chỉ có một chỗ tính, ở server.
+ * ------------------------------------------------------------------ */
+
+export interface RecapDayItem {
+  id: number;
+  time: string;
+  title: string;
+  location: string | null;
+  kind: string;
+  kindLabel: string;
+  note: string | null;
+  estimatedCost: number | null;
+}
+
+export interface RecapDay {
+  date: string;
+  index: number;
+  label: string;
+  items: RecapDayItem[];
+  estimatedCost: number;
+}
+
+export interface RecapCategory {
+  category: string;
+  label: string;
+  amount: number;
+  share: number;
+}
+
+export interface RecapStats {
+  dayCount: number;
+  memberCount: number;
+  photoCount: number;
+  noteCount: number;
+  eventCount: number;
+  totalSpent: number;
+  perPerson: number;
+  budgetTotal: number | null;
+  budgetRemaining: number | null;
+}
+
+export interface Recap {
+  trip: Trip;
+  stats: RecapStats;
+  days: RecapDay[];
+  byCategory: RecapCategory[];
+  expenses: Expense[];
+  photos: Photo[];
+  notes: Note[];
+  members: Member[];
+  settlement: Settlement;
+  generatedAt: string;
+}
+
 export const api = {
   trips: () => request<Trip[]>("/trips"),
   trip: (id: number) => request<Trip>(`/trips/${id}`),
+
+  /** Lịch trình gom theo ngày + chi tiêu theo hạng mục — 1 request cho cả màn. */
+  recap: (id: number) => request<Recap>(`/trips/${id}/recap`),
 
   /** Gộp mọi thứ trong 1 request — webview trên 3G thấy rõ từng round-trip. */
   full: (id: number) => request<FullTrip>(`/trips/${id}/full`),
@@ -135,6 +195,27 @@ export const api = {
     return request<Partner[]>(`/partners${qs ? `?${qs}` : ""}`);
   }
 };
+
+/**
+ * Link trang tổng kết công khai — mở được bằng trình duyệt thường, không cần
+ * Zalo, không cần nằm trong danh sách thử nghiệm Mini App.
+ *
+ * Suy từ VITE_API_BASE_URL (bỏ hậu tố `/api`) để khỏi thêm một biến môi trường
+ * nữa phải nhớ đồng bộ. Muốn trỏ chỗ khác thì đặt VITE_PUBLIC_BASE_URL.
+ */
+export function recapPageUrl(tripId: number): string {
+  const override = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/$/, "");
+  if (override) return `${override}/trip/${tripId}/`;
+
+  // `/trip/:id/` là route của nginx (file tĩnh worker ghi ra). Chỉ tồn tại khi
+  // API nằm sau nginx, tức VITE_API_BASE_URL có hậu tố /api. Chạy local
+  // (localhost:3000, không nginx) thì gọi thẳng route HTML của API — nếu không
+  // nút này 404 và tưởng nhầm là code hỏng.
+  if (/\/api\/?$/.test(BASE)) {
+    return `${BASE.replace(/\/api\/?$/, "")}/trip/${tripId}/`;
+  }
+  return `${BASE.replace(/\/$/, "")}/trips/${tripId}/recap.html`;
+}
 
 /**
  * Chuyến đi đang xem: ưu tiên `?trip=<id>` trên URL (Zino gửi link kèm id),

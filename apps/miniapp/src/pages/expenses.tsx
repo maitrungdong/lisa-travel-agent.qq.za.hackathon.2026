@@ -1,102 +1,134 @@
-import { useEffect, useState } from "react";
 import { ArrowRight, Receipt } from "lucide-react";
-import { api, resolveActiveTrip, type FullTrip } from "../lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { useRecap } from "../lib/use-trip";
+import { TripHeader } from "../components/trip-header";
+import { Card, CardContent } from "../components/ui/card";
+import { EmptyState, ErrorState, SectionTitle, SkeletonList } from "../components/states";
 import { formatVnd } from "../lib/utils";
 
-const CATEGORY_LABEL: Record<string, string> = {
-  food: "Ăn uống",
-  stay: "Chỗ ở",
-  transport: "Di chuyển",
-  ticket: "Vé",
-  shopping: "Mua sắm",
-  other: "Khác"
+const CATEGORY_ICON: Record<string, string> = {
+  food: "🍜",
+  stay: "🏨",
+  transport: "🚌",
+  ticket: "🎟️",
+  shopping: "🛍️",
+  other: "✨"
 };
 
 /**
  * Chi phí + chia tiền.
  *
- * Kết quả chia tiền lấy TỪ SERVER (`/trips/:id/settle`), dùng chung hàm
- * settleExpenses với tool của agent. Không tính lại ở client — nếu Zino nói
- * trong chat khác với màn hình này thì mất sạch uy tín, mà đó là lỗi rất dễ
- * mắc nếu có hai bản tính toán song song.
+ * Mọi con số ở màn này lấy TỪ SERVER (`/trips/:id/recap`), dùng chung hàm
+ * settleExpenses với tool của agent. Client không tính lại — nếu Zino nói
+ * trong chat một số mà màn hình hiện số khác thì mất sạch uy tín, mà đó là
+ * lỗi rất dễ mắc khi có hai bản tính toán song song.
  */
 export default function ExpensesPage() {
-  const [data, setData] = useState<FullTrip | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, isEmpty, reload } = useRecap();
 
-  useEffect(() => {
-    resolveActiveTrip()
-      .then((id) => (id ? api.full(id) : null))
-      .then(setData)
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">Đang tải…</p>;
+  if (loading) return <SkeletonList rows={4} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (isEmpty || !data) {
+    return (
+      <EmptyState
+        icon={<Receipt size={32} />}
+        title="Chưa có chuyến đi nào"
+        hint="Tạo chuyến đi với Zino trong nhóm Zalo trước đã nhé."
+      />
+    );
   }
 
-  if (!data || data.expenses.length === 0) {
+  const { trip, stats, byCategory, expenses, settlement } = data;
+
+  if (expenses.length === 0) {
     return (
       <div className="space-y-4">
-        <h1 className="text-lg font-bold">Chi phí chuyến đi</h1>
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-            <Receipt size={32} />
-            <p className="text-sm">
-              Chụp hoá đơn gửi vào nhóm Zalo — Zino đọc và ghi vào đây tự động.
-            </p>
-          </CardContent>
-        </Card>
+        <TripHeader trip={trip} />
+        <EmptyState
+          icon={<Receipt size={32} />}
+          title="Chưa ghi khoản chi nào"
+          hint="Chụp hoá đơn gửi vào nhóm Zalo — Zino đọc số tiền và ghi vào đây tự động."
+        />
       </div>
     );
   }
 
-  const { expenses, settlement, members } = data;
-  const perPerson = members.length ? Math.round(settlement.totalSpent / members.length) : 0;
-
-  const byCategory = expenses.reduce<Record<string, number>>((acc, e) => {
-    acc[e.category] = (acc[e.category] ?? 0) + e.amount;
-    return acc;
-  }, {});
+  const spentRatio =
+    stats.budgetTotal && stats.budgetTotal > 0
+      ? Math.min(100, Math.round((stats.totalSpent / stats.budgetTotal) * 100))
+      : null;
+  const overBudget = stats.budgetRemaining != null && stats.budgetRemaining < 0;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold">Chi phí chuyến đi</h1>
+      <TripHeader trip={trip} />
 
+      {/* Tổng chi + ngân sách */}
       <Card className="bg-primary text-primary-foreground">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium opacity-80">Tổng chi</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          <p className="text-2xl font-bold">{formatVnd(settlement.totalSpent)}</p>
-          {members.length > 0 && (
-            <p className="text-sm opacity-80">
-              ≈ {formatVnd(perPerson)}/người · {members.length} người
-            </p>
+        <CardContent className="space-y-2.5 py-4">
+          <div>
+            <p className="text-xs opacity-80">Tổng chi</p>
+            <p className="text-2xl font-bold">{formatVnd(stats.totalSpent)}</p>
+            {stats.memberCount > 0 && (
+              <p className="text-sm opacity-80">
+                ≈ {formatVnd(stats.perPerson)}/người · {stats.memberCount} người
+              </p>
+            )}
+          </div>
+
+          {spentRatio !== null && stats.budgetTotal && (
+            <div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/25">
+                <div
+                  className={`h-full rounded-full ${overBudget ? "bg-rose-300" : "bg-white"}`}
+                  style={{ width: `${spentRatio}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs opacity-90">
+                {overBudget
+                  ? `Vượt ngân sách ${formatVnd(Math.abs(stats.budgetRemaining ?? 0))}`
+                  : `Còn ${formatVnd(stats.budgetRemaining ?? 0)} trong ngân sách ${formatVnd(
+                      stats.budgetTotal
+                    )}`}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {Object.keys(byCategory).length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(byCategory)
-            .sort((a, b) => b[1] - a[1])
-            .map(([cat, amt]) => (
-              <span key={cat} className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                {CATEGORY_LABEL[cat] ?? cat}: {formatVnd(amt)}
-              </span>
-            ))}
-        </div>
+      {/* Cơ cấu chi tiêu — thanh tỉ trọng dễ đọc hơn dãy chip cũ */}
+      {byCategory.length > 1 && (
+        <section className="space-y-2">
+          <SectionTitle>Tiêu vào đâu</SectionTitle>
+          <Card>
+            <CardContent className="space-y-2.5 py-3.5">
+              {byCategory.map((c) => (
+                <div key={c.category}>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span>
+                      {CATEGORY_ICON[c.category] ?? "✨"} {c.label}
+                    </span>
+                    <span className="font-medium">
+                      {formatVnd(c.amount)}
+                      <span className="ml-1.5 text-xs text-muted-foreground">{c.share}%</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${c.share}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
       )}
 
-      {/* Ai nợ ai — số giao dịch tối thiểu */}
+      {/* Ai chuyển cho ai — số giao dịch tối thiểu */}
       {settlement.settlements.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            Chia tiền · {settlement.settlements.length} giao dịch là xong
-          </h2>
+          <SectionTitle>Chia tiền · {settlement.settlements.length} giao dịch là xong</SectionTitle>
           {settlement.settlements.map((s, i) => (
             <Card key={i}>
               <CardContent className="flex items-center gap-2 py-3">
@@ -110,7 +142,7 @@ export default function ExpensesPage() {
         </section>
       )}
 
-      {settlement.settlements.length === 0 && members.length > 0 && (
+      {settlement.settlements.length === 0 && stats.memberCount > 0 && (
         <Card>
           <CardContent className="py-4 text-center text-sm text-muted-foreground">
             🎉 Cả nhóm đã hoà nhau, không ai nợ ai.
@@ -121,7 +153,7 @@ export default function ExpensesPage() {
       {/* Số dư từng người */}
       {settlement.perMember.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Số dư từng người</h2>
+          <SectionTitle>Số dư từng người</SectionTitle>
           <Card>
             <CardContent className="divide-y divide-border py-0">
               {settlement.perMember.map((m) => (
@@ -134,7 +166,11 @@ export default function ExpensesPage() {
                   </div>
                   <span
                     className={`shrink-0 text-sm font-semibold ${
-                      m.net > 0 ? "text-emerald-600" : m.net < 0 ? "text-rose-600" : "text-muted-foreground"
+                      m.net > 0
+                        ? "text-emerald-600"
+                        : m.net < 0
+                          ? "text-rose-600"
+                          : "text-muted-foreground"
                     }`}
                   >
                     {m.net > 0 ? "+" : m.net < 0 ? "−" : ""}
@@ -147,26 +183,32 @@ export default function ExpensesPage() {
         </section>
       )}
 
-      {/* Danh sách khoản chi */}
+      {/* Danh sách khoản chi — mới nhất lên trên */}
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          {expenses.length} khoản chi
-        </h2>
-        {expenses.map((e) => (
+        <SectionTitle>{expenses.length} khoản chi</SectionTitle>
+        {[...expenses].reverse().map((e) => (
           <Card key={e.id}>
             <CardContent className="flex items-center gap-3 py-3">
-              {e.receiptPhotoUrl && (
+              {e.receiptPhotoUrl ? (
                 <img
                   src={e.receiptPhotoUrl}
                   alt="hoá đơn"
                   loading="lazy"
                   className="size-11 shrink-0 rounded-lg object-cover"
                 />
+              ) : (
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted text-lg">
+                  {CATEGORY_ICON[e.category] ?? "✨"}
+                </span>
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{e.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {e.paidByName ?? "?"} trả · {CATEGORY_LABEL[e.category] ?? e.category}
+                  {e.paidByName ?? "?"} trả ·{" "}
+                  {new Date(e.spentAt).toLocaleDateString("vi-VN", {
+                    day: "2-digit",
+                    month: "2-digit"
+                  })}
                 </p>
               </div>
               <p className="shrink-0 font-semibold">{formatVnd(e.amount)}</p>
