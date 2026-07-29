@@ -157,8 +157,17 @@ export const tripTools: ToolDef[] = [
        * đúng chuyến vừa tạo, và rơi về trang tổng kết web nếu chưa cấu hình
        * `ZINO_MINIAPP_URL`.
        */
+      /**
+       * Cố ý KHÔNG nhắc "bỏ phiếu" nữa (sửa 29/07).
+       *
+       * Bỏ phiếu và chốt nay diễn ra ngay trong chat qua `propose_options` +
+       * `record_decision`. Câu cũ mời nhóm vào app bấm nút, tạo hai lối làm
+       * cùng một việc — người dùng không biết nghe bên nào.
+       *
+       * Mini App giữ đúng một vai: nơi XEM lại lịch trình, đặt chỗ và sổ tiền.
+       */
       ctx.pushFollowUp(
-        `📱 Mở Mini App để xem lịch trình, chi phí và bỏ phiếu cho chuyến "${trip.name}":\n` +
+        `📱 Mở Mini App để xem lịch trình và chi phí của chuyến "${trip.name}":\n` +
           shareTripUrl(trip.id)
       );
 
