@@ -246,8 +246,12 @@ export interface ChatCard {
 export interface ChatReply {
   text: string;
   cards: ChatCard[];
-  /** deterministic = tính bằng code · llm = model diễn giải */
+  /** deterministic = tính bằng code · llm = model viết và qua được cổng kiểm chứng */
   source: "deterministic" | "llm";
+  /** Tool nào đã chạy — hiện lên UI để biết số liệu lấy từ đâu */
+  usedTools?: string[];
+  /** Có = câu của model bị chặn vì số không khớp dữ liệu */
+  gateBlocked?: string;
 }
 
 export const api = {

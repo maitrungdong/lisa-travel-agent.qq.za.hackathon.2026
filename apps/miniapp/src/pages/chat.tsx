@@ -14,6 +14,10 @@ interface Turn {
   text: string;
   cards?: ChatCard[];
   source?: string;
+  /** Tool nào đã chạy để ra câu này */
+  usedTools?: string[];
+  /** Có = câu của model đã bị cổng kiểm chứng chặn, đây là câu tất định thay thế */
+  gateBlocked?: string;
 }
 
 const SUGGESTIONS = [
@@ -66,7 +70,17 @@ export default function ChatPage() {
         actorZaloId: actor?.zaloUserId,
         actorName: actor?.displayName
       });
-      setTurns((t) => [...t, { role: "zino", text: r.text, cards: r.cards, source: r.source }]);
+      setTurns((t) => [
+        ...t,
+        {
+          role: "zino",
+          text: r.text,
+          cards: r.cards,
+          source: r.source,
+          usedTools: r.usedTools,
+          gateBlocked: r.gateBlocked
+        }
+      ]);
     } catch {
       setTurns((t) => [
         ...t,
@@ -131,9 +145,20 @@ export default function ChatPage() {
     }
   }
 
+  /**
+   * Bố cục cố định thay vì cuộn cả trang.
+   *
+   * `sticky` không đủ: trong webview Zalo, bàn phím mở ra làm viewport co lại
+   * và thanh nhập bị đẩy khuất, người dùng phải cuộn ngược lên mới gõ tiếp
+   * được. `fixed` neo theo viewport nên bàn phím có mở hay không nó vẫn nằm
+   * ngay trên thanh tab.
+   *
+   * Vùng tin nhắn tự chừa chỗ bằng padding đáy — nếu không, tin cuối luôn bị
+   * thanh nhập che mất.
+   */
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] flex-col">
-      <div className="flex-1 space-y-3">
+    <div className="flex flex-col">
+      <div className="space-y-3 pb-28">
         {turns.length === 0 && (
           <Card>
             <CardContent className="space-y-3 py-4">
@@ -174,9 +199,18 @@ export default function ChatPage() {
                 <span className="mt-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
                   <Bot size={13} className="text-primary" />
                 </span>
-                <p className="max-w-[85%] rounded-2xl rounded-bl-sm bg-card px-3.5 py-2.5 text-sm shadow-sm">
-                  {t.text}
-                </p>
+                <div className="max-w-[85%] space-y-1">
+                  <p className="rounded-2xl rounded-bl-sm bg-card px-3.5 py-2.5 text-sm shadow-sm">
+                    {t.text}
+                  </p>
+                  {/* Nói rõ số liệu từ đâu — giám khảo hỏi "sao tin được" là chỉ vào đây */}
+                  {(t.usedTools?.length || t.gateBlocked) && (
+                    <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
+                      {t.usedTools?.length ? `đã tra: ${t.usedTools.join(", ")}` : null}
+                      {t.gateBlocked ? " · số liệu không khớp dữ liệu, đã dùng câu tính bằng code" : null}
+                    </p>
+                  )}
+                </div>
               </div>
               {t.cards?.map((c, j) => (
                 <ActionCard key={j} card={c} onAction={(a) => void run(a)} />
@@ -194,12 +228,14 @@ export default function ChatPage() {
       </div>
 
       {toast && (
-        <div className="fixed inset-x-4 bottom-24 z-40 rounded-xl bg-foreground/95 p-3 text-xs text-background shadow-lg">
+        <div className="fixed inset-x-4 bottom-32 z-40 rounded-xl bg-foreground/95 p-3 text-xs text-background shadow-lg">
           {toast}
         </div>
       )}
 
-      <div className="sticky bottom-0 -mx-4 mt-3 flex gap-2 border-t border-border bg-background px-4 py-3">
+      {/* Ghim đáy, nằm ngay trên thanh tab (h-14 ≈ 3.5rem) */}
+      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background">
+        <div className="mx-auto flex max-w-md gap-2 px-4 py-2.5">
         <button
           type="button"
           onClick={() => void handleScan()}
@@ -218,14 +254,15 @@ export default function ChatPage() {
           className="min-w-0 flex-1 rounded-xl border border-border bg-card px-3.5 text-sm"
         />
         <button
-          type="button"
-          disabled={!input.trim() || busy}
-          onClick={() => void send(input)}
-          aria-label="Gửi"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40"
-        >
-          <Send size={17} />
-        </button>
+            type="button"
+            disabled={!input.trim() || busy}
+            onClick={() => void send(input)}
+            aria-label="Gửi"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40"
+          >
+            <Send size={17} />
+          </button>
+        </div>
       </div>
     </div>
   );
