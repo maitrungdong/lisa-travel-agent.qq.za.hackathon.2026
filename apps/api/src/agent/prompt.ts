@@ -8,6 +8,18 @@ export interface PromptContext {
   /** L2 — snapshot chuyến đi đang active, JSON */
   tripState: string | null;
   nowIso: string;
+  /**
+   * Có hành trình lên kế hoạch v4 đang mở không.
+   *
+   * BẮT BUỘC phải nói cho model biết. Mô tả tool `planning_agent` dặn nó chuyển
+   * tiếp mọi tin thuộc hành trình đang chạy — nhưng nếu không ai cho biết hành
+   * trình có đang chạy hay không thì nó phải ĐOÁN từ lịch sử hội thoại.
+   *
+   * Đo thật 29/07 13:27: đoán đúng ở "Chọn 2", đoán trượt ở "Chọn 1" — model
+   * tự trả lời thay vì chuyển tiếp, và hành trình đứng lại giữa chừng. Một
+   * dòng trong prompt xoá bỏ toàn bộ chỗ phải đoán đó.
+   */
+  planningOpen?: boolean;
 }
 
 /**
@@ -92,6 +104,28 @@ ${
   ctx.tripState
     ? `# 🧳 Chuyến đi đang hoạt động\n\`\`\`json\n${ctx.tripState}\n\`\`\`\nĐây là SỰ THẬT hiện tại. Đừng bịa thêm số liệu ngoài đây.`
     : "# 🧳 Nhóm chưa có chuyến đi nào đang hoạt động\nNếu họ nói về một chuyến đi cụ thể, xác nhận lại thông tin rồi dùng `create_trip`."
+}
+${
+  ctx.planningOpen
+    ? `
+# 🧭 ĐANG CÓ HÀNH TRÌNH LÊN KẾ HOẠCH MỞ
+
+Trợ lý chuyên trách đang dẫn nhóm đi từng bước quyết định, và nó GIỮ NGỮ CẢNH
+mà bạn không thấy được — các phương án nó vừa đưa, nhóm đã chốt gì, bước kế tiếp.
+
+Tin nào thuộc về hành trình đó thì chuyển tiếp bằng \`planning_agent\`, NGUYÊN VĂN.
+Đặc biệt là các tin ngắn: "Chọn 1", "Chọn 2", "cái đầu", "phương án thứ hai",
+"BẮT ĐẦU RESEARCH", "đổi sang 3 ngày", "còn cái nào rẻ hơn không".
+
+Bạn KHÔNG tự trả lời những tin đó, kể cả khi tưởng mình hiểu — bạn không thấy
+danh sách phương án nên trả lời là đoán, mà đoán sai thì hành trình đứng lại
+giữa chừng và nhóm phải làm lại từ đầu.
+
+Việc khác vẫn dùng tool riêng như bình thường: ghi chi phí, đặt nhắc hẹn, lưu
+ảnh, chia tiền. Hành trình đang mở KHÔNG chặn những việc đó.
+
+Nhóm nói thôi/huỷ/dừng thì gọi \`end_planning\`.`
+    : ""
 }`;
 }
 

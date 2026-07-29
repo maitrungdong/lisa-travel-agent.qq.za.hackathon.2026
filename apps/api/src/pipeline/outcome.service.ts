@@ -153,6 +153,18 @@ export class OutcomeService {
     }
 
     const tag = `[${run.traceId.slice(0, 8)}]`;
+
+    /**
+     * Giữ nhịp "đang soạn tin" suốt lượt.
+     *
+     * Đo thật 29/07: lượt research mất 175,8s. Chỉ báo typing của Zalo tắt sau
+     * vài giây, nên nếu chỉ bắn một lần thì người dùng nhìn vào ba phút im lặng
+     * hoàn toàn và kết luận bot chết — trong khi nó đang làm việc đắt nhất.
+     *
+     * Đây KHÔNG phải "backend viết chữ cho user" nên không phạm §4.2: không có
+     * text nào được sinh ra, chỉ là tín hiệu giao diện.
+     */
+    const typing = setInterval(() => void this.zalo.sendTyping(run.zaloChatId), 8_000);
     void this.zalo.sendTyping(run.zaloChatId);
 
     const sessions = (run.agentSessions ?? {}) as Record<string, string>;
@@ -193,9 +205,14 @@ export class OutcomeService {
           `${existingSessionId ? "" : " · session mới"}`
       );
 
+      clearInterval(typing);
       await this.say(run, reply);
     } catch (err) {
       await this.handleFailure(run, tag, err);
+    } finally {
+      // Phải dọn ở finally: nhánh lỗi cũng thoát qua đây, và một interval sống
+      // sót sẽ bắn typing mãi mãi vào nhóm đó cho tới khi container restart.
+      clearInterval(typing);
     }
   }
 

@@ -133,6 +133,8 @@ export class AgentService {
     } as ToolContext;
 
     const tripState = await loadTripState(ctx);
+    // Hành trình v4 đang mở hay không — model phải BIẾT, không được đoán
+    const planningRun = await this.outcome.findActive(input.conversationId);
 
     /**
      * System prompt tách hai khối để bật prompt caching:
@@ -158,7 +160,8 @@ export class AgentService {
           isReturning: conv.seenCount > 1,
           memory: memory?.content ?? "",
           tripState: tripState ? JSON.stringify(tripState, null, 2) : null,
-          nowIso: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+          nowIso: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+          planningOpen: Boolean(planningRun)
         })
       }
     ];
@@ -176,7 +179,8 @@ export class AgentService {
     this.log.log(
       `${tag} ▶ ${input.senderName}: ${preview(input.text) || "(ảnh)"}` +
         `${input.imagePath ? " 📎ảnh" : ""}` +
-        ` · trip=${activeTripId ?? "chưa có"} · nhớ=${memory?.content ? "có" : "trống"}`
+        ` · trip=${activeTripId ?? "chưa có"} · nhớ=${memory?.content ? "có" : "trống"}` +
+        `${planningRun ? ` · 🧭 hành trình run#${planningRun.id}` : ""}`
     );
 
     let cacheRead = 0;
