@@ -404,12 +404,56 @@ export class ChatAgent {
     });
   }
 
-  /** Câu thay thế khi model bị chặn — luôn tất định, luôn đúng số. */
+  /**
+   * Câu thay thế khi model bị chặn — luôn tất định, luôn đúng số.
+   *
+   * Phải TRẢ LỜI ĐƯỢC, không được là ngõ cụt. Bản đầu nói "xem các thẻ bên
+   * dưới" trong khi `cards` rỗng — người dùng hỏi một câu và nhận lại một lời
+   * chỉ trỏ vào chỗ trống. Câu tất định thì kém mượt hơn câu của model là
+   * chuyện chấp nhận được; vô dụng thì không.
+   *
+   * Nên ở đây dựng lại câu trả lời từ chính dữ liệu tool đã lấy, theo thứ tự
+   * ưu tiên: kết quả soát → tiền → tổng quan.
+   */
   private fallbackText(issues: Issue[] | null, collected: Record<string, unknown>): string {
     if (issues) return summarize(issues);
-    if (Object.keys(collected).length > 0) {
-      return "Mình đã lấy được dữ liệu chuyến đi, nhưng chưa diễn giải được. Xem các thẻ bên dưới nhé.";
+
+    const money = collected.get_money_status as
+      | { totalSpent: number; budgetRemaining: number | null; unpaidTransfers: unknown[] }
+      | undefined;
+    if (money) {
+      const parts = [`Cả nhóm đã tiêu ${vnd(money.totalSpent)}`];
+      if (money.budgetRemaining != null) {
+        parts.push(
+          money.budgetRemaining >= 0
+            ? `còn ${vnd(money.budgetRemaining)} trong ngân sách`
+            : `vượt ngân sách ${vnd(-money.budgetRemaining)}`
+        );
+      }
+      parts.push(
+        money.unpaidTransfers.length === 0
+          ? "không ai còn nợ ai"
+          : `còn ${money.unpaidTransfers.length} khoản chưa chuyển`
+      );
+      return `${parts.join(" · ")}. Mình chỉ nói được con số có trong sổ, không tự cộng trừ thêm.`;
     }
+
+    const trip = collected.get_trip_overview as
+      | { name?: string; dayCount?: number; memberCount?: number; totalSpent?: number }
+      | undefined;
+    if (trip) {
+      return (
+        `${trip.name ?? "Chuyến này"}: ${trip.dayCount ?? 0} ngày, ${trip.memberCount ?? 0} người, ` +
+        `đã tiêu ${vnd(trip.totalSpent ?? 0)}. ` +
+        "Mình chỉ nói được con số có trong sổ, không tự tính thêm — hỏi lại theo số liệu thật nhé."
+      );
+    }
+
     return "Mình chưa trả lời được câu này. Hỏi trong nhóm Zalo để mình research giúp nhé.";
   }
+}
+
+/** Định dạng tiền cho câu tất định. Không dùng Intl — output đổi theo ICU của môi trường. */
+function vnd(n: number): string {
+  return `${Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}đ`;
 }
