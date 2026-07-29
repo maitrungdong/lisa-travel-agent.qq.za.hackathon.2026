@@ -163,6 +163,11 @@ export class V7Service {
         zino_context: zinoContext
       };
 
+      // Run này đã từng giao việc cho Brain chưa — quyết định độ chặt của cổng §6.9
+      const hasPriorBrainRun = Boolean(
+        ((run.agentSessions ?? {}) as Record<string, string>).BRAIN
+      );
+
       const intake = validateIntake(
         await this.call(run, "INTAKE", {
           user_message: job.userMessage,
@@ -173,7 +178,8 @@ export class V7Service {
             role: null // §6.7: owner không bao giờ là blocker
           },
           thin_state: stateForAgent
-        })
+        }),
+        { hasPriorBrainRun }
       );
 
       let state = this.context.stripDerived(

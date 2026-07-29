@@ -194,8 +194,28 @@ function sliceOuterBraces(t: string): string | null {
 /* Validator — v7 §10                                                   */
 /* ==================================================================== */
 
-/** §10.1 + §6.9. Invariant của cổng Brain nằm ở đây, không nằm trong service. */
-export function validateIntake(o: Record<string, unknown>): IntakeResult {
+/**
+ * §10.1 + §6.9. Invariant của cổng Brain nằm ở đây, không nằm trong service.
+ *
+ * `hasPriorBrainRun` — lượt này có phải LẦN ĐẦU giao việc cho Brain không.
+ *
+ * Cổng năm điều kiện được viết cho lần bàn giao đầu tiên: mục đích là ngăn một
+ * lượt Brain 200 giây chạy oan trên yêu cầu còn mơ hồ. Nhưng người dùng còn có
+ * lượt TIẾP THEO — chọn phương án, đổi một ràng buộc — và ở đó `scope_summary`
+ * đã chốt từ lượt trước, đang nằm trong `thin_state`, và Brain nhận được nó.
+ * Bắt Intake khai lại là thừa, và §6.9 không hề nói tới tình huống này.
+ *
+ * ĐO THẬT 29/07 09:22: sau một lượt research thành công, user chọn phương án
+ * xe → Intake trả `target=brain`, `brain_task="selection"`, `scope_summary`
+ * rỗng → bị chặn, mất luôn lượt chọn.
+ *
+ * Tín hiệu dùng để nới là thứ BACKEND tự biết chắc — đã từng tạo session Brain
+ * cho run này chưa — chứ không phải đoán theo hình dạng state của agent.
+ */
+export function validateIntake(
+  o: Record<string, unknown>,
+  opts: { hasPriorBrainRun?: boolean } = {}
+): IntakeResult {
   const bad = (r: string) => {
     throw new V7ValidationError("INTAKE", r, o);
   };
@@ -224,9 +244,10 @@ export function validateIntake(o: Record<string, unknown>): IntakeResult {
     if (handoff.owner_confirmation !== "confirmed") {
       bad(`owner_confirmation = ${JSON.stringify(handoff.owner_confirmation)}, cần "confirmed"`);
     }
-    if (typeof handoff.scope_summary !== "string" || handoff.scope_summary.trim().length === 0) {
-      bad("scope_summary rỗng");
-    }
+    const scopeOk =
+      typeof handoff.scope_summary === "string" && handoff.scope_summary.trim().length > 0;
+    // Lượt đầu bắt buộc có scope; lượt tiếp theo thì scope đã nằm trong thin_state
+    if (!scopeOk && !opts.hasPriorBrainRun) bad("scope_summary rỗng");
   }
 
   return o as unknown as IntakeResult;
