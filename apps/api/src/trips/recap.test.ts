@@ -7,6 +7,7 @@ import {
   ictTime,
   renderRecapHtml,
   tripDayCount,
+  cssUrl,
   type RecapInput
 } from "./recap";
 
@@ -249,5 +250,65 @@ describe("renderRecapHtml", () => {
 
   it("escapeHtml xử lý đủ 5 ký tự nguy hiểm", () => {
     expect(escapeHtml(`<>&"'`)).toBe("&lt;&gt;&amp;&quot;&#39;");
+  });
+
+  it("hiện ai trả bao nhiêu, ai còn phải bù — không chỉ mũi tên chuyển tiền", () => {
+    const html = renderRecapHtml(buildRecap(fixture()));
+    expect(html).toContain("trả ");
+    expect(html).toMatch(/còn bù|được nhận|vừa đủ/);
+  });
+
+  it("nói ra chỗ làm tròn thay vì giấu", () => {
+    const f = fixture();
+    f.settlement.roundingAdjustment = 667;
+    expect(renderRecapHtml(buildRecap(f))).toContain("Đã làm tròn 667₫");
+    f.settlement.roundingAdjustment = 0;
+    expect(renderRecapHtml(buildRecap(f))).not.toContain("Đã làm tròn");
+  });
+
+  it("cảnh báo của phần chia tiền phải hiện ra, không nuốt", () => {
+    const f = fixture();
+    f.settlement.warnings = ["Chuyến đi chưa có thành viên"];
+    expect(renderRecapHtml(buildRecap(f))).toContain("Chuyến đi chưa có thành viên");
+  });
+
+  it("KHÔNG nhét số tiền dài vào ô đếm — ô đó chỉ chứa số nguyên ngắn", () => {
+    const f = fixture();
+    const html = renderRecapHtml(buildRecap(f));
+    const stats = html.slice(html.indexOf('class="stats"'), html.indexOf('class="wrap"'));
+    // "2.666.667₫" ở 20px đậm trong ô rộng ~70px là tràn hoặc vỡ dòng giữa số.
+    expect(stats).not.toContain("₫");
+  });
+});
+
+/**
+ * `cssUrl` là hàng rào riêng cho URL nằm trong `style="background-image:url()"`.
+ * `escapeHtml` KHÔNG đủ ở đó: nó đổi `"` thành `&quot;`, nhưng trình duyệt giải
+ * mã thực thể trước khi đọc CSS nên dấu nháy hiện lại nguyên hình và thoát ra
+ * được. Cách duy nhất chắc chắn là từ chối hẳn các ký tự đó.
+ */
+describe("cssUrl", () => {
+  it("cho qua http(s) và đường dẫn tương đối", () => {
+    expect(cssUrl("https://cdn.x/a.jpg")).toBe("https://cdn.x/a.jpg");
+    expect(cssUrl("/media/abc.jpg")).toBe("/media/abc.jpg");
+  });
+
+  it("chặn mọi thứ có thể thoát khỏi url()", () => {
+    expect(cssUrl("https://x/a'); background:url('evil")).toBe("");
+    expect(cssUrl('https://x/a");x:url("evil')).toBe("");
+    expect(cssUrl("https://x/a b.jpg")).toBe("");
+    expect(cssUrl("https://x/a\\b.jpg")).toBe("");
+  });
+
+  it("chặn scheme nguy hiểm", () => {
+    expect(cssUrl("javascript:alert(1)")).toBe("");
+    expect(cssUrl("data:image/svg+xml,<svg onload=alert(1)>")).toBe("");
+  });
+
+  it("ảnh có URL bẩn thì hero rơi về nền chuyển sắc, không dựng style hỏng", () => {
+    const f = fixture();
+    f.photos = [{ ...f.photos[0], url: "https://x/a'); background:url('evil" }];
+    const html = renderRecapHtml(buildRecap(f));
+    expect(html).not.toContain("background-image:url");
   });
 });
