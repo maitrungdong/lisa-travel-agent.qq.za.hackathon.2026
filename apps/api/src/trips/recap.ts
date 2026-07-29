@@ -400,16 +400,43 @@ export function renderRecapHtml(data: RecapPayload, opts: RenderRecapOptions = {
         .join("")
     : `<p class="empty">Chuyến này chưa có lịch trình được ghi lại.</p>`;
 
+  /**
+   * Chưa tiêu đồng nào thì KHÔNG khoe "còn dư".
+   *
+   * Chuyến Nha Trang trên production: 0 sự kiện, 0đ chi, mà trang vẫn in đậm
+   * "Còn dư 4.285.716₫ so với ngân sách" — nghe như nhóm vừa tiết kiệm được
+   * ngần ấy, trong khi chuyến còn chưa khởi hành. Chưa chi gì thì con số đó
+   * đúng bằng ngân sách, nên gọi thẳng nó là ngân sách.
+   */
   const budgetLine =
     stats.budgetRemaining == null
       ? ""
-      : `<p class="budget ${stats.budgetRemaining >= 0 ? "ok" : "over"}">
+      : stats.totalSpent === 0
+        ? `<p class="budget plan">Ngân sách ${formatVnd(stats.budgetTotal ?? 0)}${
+            trip.budgetPerPerson ? ` · ${formatVnd(trip.budgetPerPerson)}/người` : ""
+          }</p>`
+        : `<p class="budget ${stats.budgetRemaining >= 0 ? "ok" : "over"}">
         ${
           stats.budgetRemaining >= 0
             ? `Còn dư ${formatVnd(stats.budgetRemaining)} so với ngân sách`
             : `Vượt ngân sách ${formatVnd(-stats.budgetRemaining)}`
         }
       </p>`;
+
+  /**
+   * Chuyến chưa có gì thì nói thẳng, đừng bày ra ba khối rỗng.
+   *
+   * Không có khối này thì trang mở ra là một dãy "chưa có lịch trình", "0₫",
+   * "không ai nợ ai" — người đọc tưởng trang hỏng chứ không nghĩ là chuyến chưa
+   * bắt đầu. Đây đúng cái lỗi "rỗng trông như hỏng" mà cả sản phẩm đang tránh.
+   */
+  const isBlank = stats.eventCount === 0 && stats.totalSpent === 0 && stats.photoCount === 0;
+  const blankPanel = isBlank
+    ? `<div class="card blank">
+      <p><b>Chuyến này chưa có gì để tổng kết.</b></p>
+      <p>Nhắn cho Zino trong nhóm Zalo để thêm lịch trình, khoản chi hay ảnh — trang này tự dựng lại mỗi lần mở.</p>
+    </div>`
+    : "";
 
   const categoryBars = byCategory
     .map(
@@ -576,6 +603,9 @@ h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute
 .budget{margin-top:10px;font-size:13px;font-weight:700;display:inline-block;padding:5px 11px;border-radius:999px}
 .budget.ok{background:var(--teal-soft);color:var(--teal)}
 .budget.over{background:rgba(190,18,60,.1);color:var(--rose)}
+.budget.plan{background:var(--line);color:var(--muted)}
+.blank{margin-top:28px;text-align:center}
+.blank p+p{margin-top:6px;font-size:14px;color:var(--muted)}
 .bar{margin-top:14px}
 .bar-h{display:flex;align-items:baseline;gap:8px;font-size:13px;margin-bottom:5px}
 .bar-h span{font-weight:600}
@@ -646,6 +676,7 @@ footer{text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid v
 
 <div class="wrap">
   ${intro}
+  ${blankPanel}
 
   <h2>Lịch trình</h2>
   ${timeline}

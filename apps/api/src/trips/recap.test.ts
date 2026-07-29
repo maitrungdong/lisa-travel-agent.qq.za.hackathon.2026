@@ -252,6 +252,33 @@ describe("renderRecapHtml", () => {
     expect(escapeHtml(`<>&"'`)).toBe("&lt;&gt;&amp;&quot;&#39;");
   });
 
+  /**
+   * Gặp thật trên production: chuyến "Nha Trang · 7 người" chưa khởi hành, 0
+   * sự kiện, 0đ chi, mà trang in đậm "Còn dư 4.285.716₫ so với ngân sách" —
+   * nghe như nhóm vừa tiết kiệm được ngần ấy.
+   */
+  it("chưa tiêu đồng nào thì gọi là ngân sách, KHÔNG khoe 'còn dư'", () => {
+    const f = fixture();
+    f.expenses = [];
+    f.settlement = { ...f.settlement, totalSpent: 0, settlements: [], perMember: [] };
+    const html = renderRecapHtml(buildRecap(f));
+    expect(html).not.toContain("Còn dư");
+    expect(html).toContain("Ngân sách");
+  });
+
+  it("chuyến trống thì nói thẳng là chưa có gì, đừng bày ba khối rỗng", () => {
+    const f = fixture();
+    f.events = [];
+    f.expenses = [];
+    f.photos = [];
+    f.settlement = { ...f.settlement, totalSpent: 0, settlements: [], perMember: [] };
+    expect(renderRecapHtml(buildRecap(f))).toContain("chưa có gì để tổng kết");
+  });
+
+  it("chuyến có dữ liệu thì KHÔNG hiện khối 'chưa có gì'", () => {
+    expect(renderRecapHtml(buildRecap(fixture()))).not.toContain("chưa có gì để tổng kết");
+  });
+
   it("hiện ai trả bao nhiêu, ai còn phải bù — không chỉ mũi tên chuyển tiền", () => {
     const html = renderRecapHtml(buildRecap(fixture()));
     expect(html).toContain("trả ");
