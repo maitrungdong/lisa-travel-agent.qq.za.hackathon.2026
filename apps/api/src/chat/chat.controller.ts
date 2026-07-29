@@ -49,6 +49,8 @@ export interface ChatReply {
   usedTools?: string[];
   /** Có lý do = câu của model đã bị chặn và thay bằng câu tất định */
   gateBlocked?: string;
+  /** Có lý do = agent không chạy được, câu này do code tính. Hỏng phải thấy được. */
+  degraded?: string;
 }
 
 /**
@@ -113,12 +115,16 @@ export class ChatController {
       if (r.gateBlocked) {
         this.log.warn(`trip#${tripId}: cổng kiểm chứng chặn câu của model (${r.gateBlocked})`);
       }
+      if (r.degraded) {
+        this.log.error(`trip#${tripId}: agent chạy chế độ dự phòng — ${r.degraded}`);
+      }
       return {
         text: r.text,
         cards: r.cards,
         source: r.source,
         usedTools: r.usedTools,
-        gateBlocked: r.gateBlocked
+        gateBlocked: r.gateBlocked,
+        degraded: r.degraded
       };
     } catch (err) {
       this.log.error(`Agent hỏng, rơi về định tuyến regex: ${String(err)}`);

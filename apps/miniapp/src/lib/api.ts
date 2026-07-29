@@ -252,6 +252,8 @@ export interface ChatReply {
   usedTools?: string[];
   /** Có = câu của model bị chặn vì số không khớp dữ liệu */
   gateBlocked?: string;
+  /** Có = agent không chạy được, câu này do code tính */
+  degraded?: string;
 }
 
 export const api = {

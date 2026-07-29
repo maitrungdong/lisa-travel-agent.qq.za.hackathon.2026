@@ -18,6 +18,8 @@ interface Turn {
   usedTools?: string[];
   /** Có = câu của model đã bị cổng kiểm chứng chặn, đây là câu tất định thay thế */
   gateBlocked?: string;
+  /** Có = agent không chạy được (lỗi model/mạng), câu này do code tính */
+  degraded?: string;
 }
 
 const SUGGESTIONS = [
@@ -78,7 +80,8 @@ export default function ChatPage() {
           cards: r.cards,
           source: r.source,
           usedTools: r.usedTools,
-          gateBlocked: r.gateBlocked
+          gateBlocked: r.gateBlocked,
+          degraded: r.degraded
         }
       ]);
     } catch {
@@ -204,10 +207,13 @@ export default function ChatPage() {
                     {t.text}
                   </p>
                   {/* Nói rõ số liệu từ đâu — giám khảo hỏi "sao tin được" là chỉ vào đây */}
-                  {(t.usedTools?.length || t.gateBlocked) && (
+                  {(t.usedTools?.length || t.gateBlocked || t.degraded) && (
                     <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
                       {t.usedTools?.length ? `đã tra: ${t.usedTools.join(", ")}` : null}
                       {t.gateBlocked ? " · số liệu không khớp dữ liệu, đã dùng câu tính bằng code" : null}
+                      {/* Agent chết mà câu trả lời vẫn trôi chảy là kiểu hỏng tệ
+                          nhất — không ai biết để đi sửa. Nói thẳng ra đây. */}
+                      {t.degraded ? `⚠ Zino đang chạy chế độ dự phòng: ${t.degraded}` : null}
                     </p>
                   )}
                 </div>

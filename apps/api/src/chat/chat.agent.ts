@@ -3,6 +3,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
 import { DecisionsService } from "../decisions/decisions.service";
 import { TripsService } from "../trips/trips.service";
+import { envStr } from "../pipeline/pipeline.types";
 import { gateReply } from "./grounding";
 
 /**
@@ -50,6 +51,14 @@ export interface AgentReply {
   usedTools: string[];
   /** Có bị cổng kiểm chứng chặn không, kèm lý do. Dùng để theo dõi chất lượng. */
   gateBlocked?: string;
+  /**
+   * Có giá trị = agent KHÔNG chạy được, đây là câu tính bằng code.
+   *
+   * Thêm field này sau khi mất một vòng deploy để phát hiện model call hỏng:
+   * câu trả lời tất định trông y hệt câu bình thường, không ai biết agent đã
+   * chết. Hỏng thì phải nhìn thấy ngay từ UI.
+   */
+  degraded?: string;
 }
 
 const MAX_ROUNDS = 4;
@@ -121,7 +130,12 @@ export class ChatAgent {
       for (let round = 0; round < MAX_ROUNDS; round++) {
         const res = await this.anthropic.messages.create(
           {
-            model: process.env.ZINO_CHAT_MODEL ?? "claude-haiku-4-5-20251001",
+            // envStr chứ KHÔNG phải `??`: compose đặt ZINO_CHAT_MODEL: ${ZINO_CHAT_MODEL:-}
+            // nên biến TỒN TẠI với giá trị rỗng. `??` không bắt được chuỗi rỗng →
+            // tên model là "" → Anthropic trả 400 → agent ném lỗi → MỌI câu hỏi
+            // đều rơi về câu tất định trong im lặng. Repo đã dính đúng bẫy này
+            // một lần với nhóm biến ZINO_* (xem pipeline.types.ts).
+            model: envStr("ZINO_CHAT_MODEL", "claude-haiku-4-5-20251001"),
             max_tokens: 700,
             system: SYSTEM,
             tools: TOOLS,
@@ -191,13 +205,14 @@ export class ChatAgent {
       };
     } catch (err) {
       // Model lỗi/timeout thì vẫn phải trả lời được — dữ liệu đã có trong tay
-      this.log.warn(`Chat agent lỗi: ${String(err)}`);
+      this.log.error(`Chat agent lỗi: ${String(err)}`);
       const safe = issues ?? (await this.checkIssues(tripId));
       return {
         text: summarize(safe),
         cards: this.buildCards(safe, unpaidCount),
         source: "deterministic",
-        usedTools
+        usedTools,
+        degraded: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)
       };
     }
   }
