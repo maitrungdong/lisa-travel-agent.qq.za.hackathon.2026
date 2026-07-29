@@ -66,7 +66,22 @@ export interface ChatReply {
 @Controller()
 export class ChatController {
   private readonly log = new Logger(ChatController.name);
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
+  /**
+   * Client cho ĐƯỜNG LUI (khi ChatAgent hỏng, xem `ask`).
+   *
+   * Phải có timeout, và lý do khắt khe hơn chỗ khác: đây là đường chạy ĐỒNG BỘ
+   * của `POST /trips/:id/chat` — người dùng đang ngồi nhìn màn hình chờ. Nó lại
+   * chỉ chạy đúng lúc agent chính vừa hỏng, tức là lúc hệ thống đã có vấn đề;
+   * treo thêm ở đây là biến một lỗi thành một màn hình đứng im.
+   *
+   * 30s > 25s của `TOOL_TIMEOUT_MS` trong ChatAgent nhưng vẫn dưới `read 120s`
+   * của nginx, nên nginx không bao giờ là bên cắt trước.
+   */
+  private readonly anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    timeout: 30_000,
+    maxRetries: 1
+  });
 
   constructor(
     private readonly trips: TripsService,
