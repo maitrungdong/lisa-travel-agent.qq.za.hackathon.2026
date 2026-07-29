@@ -93,6 +93,11 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       ZALO_OA_SECRET: ${ZALO_OA_SECRET:-}
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:?thiếu ZALO_BOT_TOKEN trong .env}
+      # Tên hiển thị của bot, đúng như Zalo chèn vào đầu tin nhắn nhóm.
+      # Lấy bằng: curl -s https://<domain>/zalo/info | jq -r .me.display_name
+      # Không đặt thì trigger/cửa thoát rơi về cách khớp nới lỏng hơn (khớp ở
+      # cuối câu) — vẫn chạy, nhưng kém chính xác.
+      ZALO_BOT_NAME: ${ZALO_BOT_NAME:-}
 
       # ── Agent System v7 — ba agent Intake / Brain / Finalizer ──
       # Tắt cờ = mọi đường v7 short-circuit, bot chạy y như trước.

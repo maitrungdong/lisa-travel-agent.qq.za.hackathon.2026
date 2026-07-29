@@ -65,7 +65,22 @@ export function looksLikeResearchTrigger(text: string): boolean {
     .replace(/[.!…]+$/u, "")
     .trim()
     .toUpperCase();
-  return norm === RESEARCH_TRIGGER;
+  if (norm === RESEARCH_TRIGGER) return true;
+
+  /**
+   * Đường lui cho chat nhóm.
+   *
+   * Zalo chèn `"@Tên Bot "` vào đầu mọi tin gửi bot trong nhóm, và tên bot có
+   * dấu cách nên `stripBotMention` chỉ gỡ sạch được khi biết `ZALO_BOT_NAME`.
+   * Chưa cấu hình biến đó thì so sánh chính xác ở trên luôn trượt — tức là
+   * trigger duy nhất mở Brain không bao giờ bấm được, đúng trong môi trường
+   * sản phẩm này sinh ra để chạy.
+   *
+   * Nới đúng một nấc: CHỈ khi tin bắt đầu bằng mention thì mới chấp nhận
+   * trigger đứng ở cuối. Không phải "chứa đâu đó" — `BẮT ĐẦU RESEARCH` phải là
+   * phần kết của câu, nên "đừng BẮT ĐẦU RESEARCH vội" vẫn bị từ chối.
+   */
+  return /^@/u.test(text.trim()) && norm.endsWith(RESEARCH_TRIGGER);
 }
 
 /* ==================================================================== */

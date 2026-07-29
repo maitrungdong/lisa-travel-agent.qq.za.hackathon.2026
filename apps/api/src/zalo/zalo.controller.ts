@@ -9,7 +9,7 @@ import { V7Service } from "../pipeline/v7.service";
 import { v7Enabled } from "../pipeline/v7.types";
 import { ConversationService } from "./conversation.service";
 import { ZaloClient } from "./zalo.client";
-import { normalizeUpdate, type ZaloUpdate } from "./zalo.types";
+import { normalizeUpdate, stripBotMention, type ZaloUpdate } from "./zalo.types";
 
 /**
  * Cổng vào duy nhất từ Zalo.
@@ -158,16 +158,24 @@ export class ZaloController {
     msg: { chatId: string; text?: string | null; senderZaloId: string; senderName: string }
   ): Promise<boolean> {
     const text = msg.text?.trim();
-    if (!text || text.length > 32) return false;
+    if (!text || text.length > 64) return false;
 
-    const stripped = text
-      .replace(/^@\S+\s*/i, "") // bỏ "@Zino"
+    /**
+     * Trước đây gỡ mention bằng `^@\S+\s*` — chỉ ăn được MỘT token, nên
+     * `"@Bot ZINO - Trợ lý nhu cầu 482913"` còn lại `"ZINO - Trợ lý nhu cầu
+     * 482913"` và không bao giờ khớp 6 chữ số. Mã ghép đôi vì thế chưa từng
+     * hoạt động trong nhóm. `stripBotMention` biết tên bot nên gỡ đúng.
+     */
+    const stripped = stripBotMention(text)
       .replace(/^(m[ãa]|code|link)\s*:?\s*/i, "") // bỏ "mã:" / "code"
       .trim();
-    if (!/^\d{6}$/.test(stripped)) return false;
+    // Đường lui khi chưa đặt ZALO_BOT_NAME: lấy cụm 6 số ở CUỐI tin có mention
+    const tail = text.startsWith("@") ? (text.match(/(\d{6})\s*$/)?.[1] ?? null) : null;
+    const code = /^\d{6}$/.test(stripped) ? stripped : tail;
+    if (!code) return false;
 
     const result = await this.auth.redeemCode(
-      stripped,
+      code,
       msg.senderZaloId,
       msg.senderName,
       conversationId
@@ -180,7 +188,7 @@ export class ZaloController {
     await this.zalo.sendRaw(msg.chatId, reply);
     await this.conversations.recordOutbound(conversationId, reply);
     this.log.log(
-      `link-code ${stripped} · ${msg.senderName} · ${result.ok ? "OK" : `FAIL: ${result.reason}`}`
+      `link-code ${code} · ${msg.senderName} · ${result.ok ? "OK" : `FAIL: ${result.reason}`}`
     );
     return true;
   }
@@ -218,8 +226,20 @@ export class ZaloController {
       const run = await this.v7.findActive(conversationId);
       if (!run) return false;
 
-      const text = (msg.text ?? "").trim();
-      if (!text) return false; // ảnh/sticker đơn thuần → để AgentService lo
+      const raw = (msg.text ?? "").trim();
+      if (!raw) return false; // ảnh/sticker đơn thuần → để AgentService lo
+
+      /**
+       * Gỡ `"@Tên Bot "` TRƯỚC khi làm bất cứ việc gì với tin nhắn.
+       *
+       * Trong nhóm, Zalo chèn tiền tố này vào mọi tin gửi bot. Không gỡ thì
+       * cửa thoát dưới đây không bao giờ khớp (regex neo `^...$`), và Intake
+       * nhận được `"@Bot ZINO - Trợ lý nhu cầu BẮT ĐẦU RESEARCH"` — theo §2.5
+       * đó KHÔNG phải trigger hợp lệ, nên Brain không bao giờ được gọi. Đo
+       * thật 29/07: ba lượt liên tiếp `target=deliver`, bot hứa "đang research"
+       * mà không có gì chạy.
+       */
+      const text = stripBotMention(raw);
 
       /**
        * CỬA THOÁT CỨNG.
@@ -233,7 +253,7 @@ export class ZaloController {
        * cửa thoát nằm sau đúng cánh cửa nó phải mở. Không có lối này thì một
        * flow kẹt là nhóm mất luôn ghi chi phí, nhắc lịch, ảnh, Partner Network.
        */
-      if (/^(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu.test(text)) {
+      if (isEscapeCommand(text, raw)) {
         await this.v7.abandon(run.id, "cancelled");
         await this.zalo.sendRaw(
           msg.chatId,
@@ -316,6 +336,23 @@ export class ZaloController {
  *
  * Trả candidate_id chuẩn hoá, hoặc null nếu không phải một lựa chọn.
  */
+/**
+ * Cửa thoát flow v7 — khớp chuỗi cố định, KHÔNG phân loại ý định.
+ *
+ * Hai nấc, vì cùng lý do với `looksLikeResearchTrigger`: khi chưa đặt
+ * `ZALO_BOT_NAME` thì `stripBotMention` không gỡ hết được tên bot nhiều chữ,
+ * và cửa thoát — thứ tồn tại để cứu nhóm khỏi một flow kẹt — sẽ chính nó bị
+ * kẹt sau cái tiền tố mention. Nấc hai chỉ mở khi tin bắt đầu bằng mention.
+ *
+ * Nhận nhầm ở đây rẻ: hậu quả tệ nhất là đóng flow, mà mở lại chỉ mất một câu.
+ */
+export function isEscapeCommand(clean: string, raw: string): boolean {
+  const EXACT = /^(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu;
+  if (EXACT.test(clean)) return true;
+  const TAIL = /(^|\s)(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu;
+  return raw.trim().startsWith("@") && TAIL.test(clean);
+}
+
 export function parseCandidate(text: string): string | null {
   const t = text.trim().toLowerCase();
 

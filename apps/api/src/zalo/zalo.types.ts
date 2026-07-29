@@ -104,6 +104,38 @@ function normalizeTimestamp(raw: number | undefined): Date {
   return Number.isNaN(d.getTime()) || drift > 365 * 86_400_000 ? new Date() : d;
 }
 
+/**
+ * Gỡ tiền tố mention "@Tên Bot" ở đầu tin nhắn nhóm.
+ *
+ * VÌ SAO BẮT BUỘC: trong nhóm, Zalo chèn tên hiển thị của bot vào đầu MỌI tin
+ * gửi cho nó — `"@Bot ZINO - Trợ lý nhu cầu BẮT ĐẦU RESEARCH"`. Webhook không
+ * kèm mảng `mentions` nào để tách, chỉ có `text` thô.
+ *
+ * Ba cơ chế của hệ thống đều khớp chuỗi bằng regex neo `^...$` và vì thế đều
+ * chết trong nhóm — đúng nơi sản phẩm này sống:
+ *   • trigger `BẮT ĐẦU RESEARCH` (v7 §2.5) → Brain không bao giờ chạy
+ *   • cửa thoát `thoát` → flow kẹt thì không ai mở ra được
+ *   • mã ghép đôi 6 số → Mini App không liên kết được
+ *
+ * Tên bot có dấu cách nên không thể gỡ bằng một quy tắc chung. Đặt
+ * `ZALO_BOT_NAME` (lấy từ `GET /zalo/info`) để gỡ chính xác; không đặt thì rơi
+ * về gỡ một token — đủ cho `"@Zino ..."` nhưng không đủ cho tên nhiều chữ, nên
+ * hai chỗ khớp chuỗi còn có thêm đường lui riêng.
+ */
+export function stripBotMention(text: string, botName?: string | null): string {
+  const t = text.trim();
+  if (!t.startsWith("@")) return t;
+
+  const name = (botName ?? process.env.ZALO_BOT_NAME ?? "").trim();
+  if (name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const exact = new RegExp(`^@\\s*${escaped}\\s*`, "iu");
+    if (exact.test(t)) return t.replace(exact, "").trim();
+  }
+
+  return t.replace(/^@\S+\s*/u, "").trim();
+}
+
 /** Chuẩn hoá payload webhook → InboundMessage. Trả null nếu không dùng được. */
 export function normalizeUpdate(update: ZaloUpdate): InboundMessage | null {
   const m = update.message;
