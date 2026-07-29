@@ -191,9 +191,9 @@ export default function HomePage() {
                 lối đổi chuyến phải gắn riêng vào đây — nếu không thì đúng cái
                 tab người ta mở đầu tiên lại là tab duy nhất không đổi được. */}
             <TripSwitcher currentTripId={trip.id}>
-              <h2 className="truncate text-lg font-bold leading-tight">{trip.name}</h2>
+              <h2 className="truncate text-base font-bold leading-tight">{trip.name}</h2>
             </TripSwitcher>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               {trip.destination} · {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
             </p>
           </div>

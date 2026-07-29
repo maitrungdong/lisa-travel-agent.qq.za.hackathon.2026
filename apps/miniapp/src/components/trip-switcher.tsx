@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plane } from "lucide-react";
 import { loadTrips } from "../lib/active-trip";
 import type { TripSummary } from "../lib/api";
 import { groupTrips } from "../lib/trip-groups";
@@ -68,6 +68,16 @@ export function TripSwitcher({
 
   if (!canSwitch) return <>{children}</>;
 
+  /**
+   * Bản đầu chỉ dán một mũi tên 16px cạnh tên chuyến. Người dùng thật không
+   * nhìn thấy nó, và lý do thì rõ khi mổ ra: icon dán vào chữ, không nền,
+   * không viền, không động từ — mắt đọc nó là dấu trang trí của tiêu đề chứ
+   * không phải nút. Ở Trang chủ nó còn phải cạnh tranh với badge trạng thái,
+   * đếm ngược, bốn ô số và thanh ngân sách.
+   *
+   * Nên thanh này cố tình mang đủ ba tín hiệu của một control: có nền riêng
+   * tách khỏi thẻ, có viền khép kín, và có chữ "Đổi" nói thẳng nó làm gì.
+   */
   return (
     <>
       <button
@@ -77,10 +87,14 @@ export function TripSwitcher({
         // Cố tình KHÔNG đặt aria-label: có nó thì trình đọc màn hình đọc "đổi
         // chuyến đi" và nuốt mất tên chuyến — đúng thông tin quan trọng nhất.
         // Tên chuyến nằm trong children đã là tên gọi của nút rồi.
-        className="flex max-w-full items-center gap-1 text-left active:opacity-60"
+        className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-2.5 py-2 text-left active:opacity-70"
       >
-        <span className="min-w-0">{children}</span>
-        <ChevronDown size={16} className="shrink-0 text-primary" />
+        <Plane size={15} className="shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">{children}</span>
+        <span className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary">
+          Đổi
+          <ChevronDown size={14} />
+        </span>
       </button>
       {open && (
         <TripSheet trips={trips ?? []} currentTripId={currentTripId} onClose={() => setOpen(false)} />

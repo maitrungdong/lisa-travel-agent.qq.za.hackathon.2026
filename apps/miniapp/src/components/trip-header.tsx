@@ -33,20 +33,21 @@ export function countdownLabel(trip: Trip, now: Date = new Date()): string {
  */
 export function TripHeader({ trip }: { trip: Trip }) {
   return (
-    <header className="rounded-lg border border-border bg-card p-3.5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <TripSwitcher currentTripId={trip.id}>
-            <h1 className="truncate text-base font-bold">{trip.name}</h1>
-          </TripSwitcher>
-          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-            <MapPin size={12} className="shrink-0" />
-            {trip.destination}
-            <span className="mx-0.5">·</span>
-            <CalendarDays size={12} className="shrink-0" />
-            {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
-          </p>
-        </div>
+    // Trước đây tên chuyến và badge nằm chung một hàng, nút đổi chuyến phải
+    // chen vào giữa. Tách hai tầng: tầng trên là control, tầng dưới là thông
+    // tin — nút mới có chỗ để trông ra nút.
+    <header className="space-y-2 rounded-lg border border-border bg-card p-3.5">
+      <TripSwitcher currentTripId={trip.id}>
+        <h1 className="truncate text-base font-bold">{trip.name}</h1>
+      </TripSwitcher>
+      <div className="flex items-center gap-2">
+        <p className="flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-muted-foreground">
+          <MapPin size={12} className="shrink-0" />
+          {trip.destination}
+          <span className="mx-0.5">·</span>
+          <CalendarDays size={12} className="shrink-0" />
+          {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
+        </p>
         <Badge variant={trip.status === "done" ? "secondary" : "default"} className="shrink-0">
           {STATUS_LABEL[trip.status] ?? trip.status}
         </Badge>
