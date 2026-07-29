@@ -198,20 +198,43 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
 
   /* ---------------------------------------------------------------- */
 
+  /**
+   * Giữ trạng thái "đang gõ…" trong suốt một việc dài.
+   *
+   * `sendChatAction` của Zalo tự tắt sau vài giây, còn một lượt agent kéo
+   * 7-30s và deep_plan tới ~2 phút — gửi một phát lúc nhận tin là 90% quãng
+   * chờ nhóm nhìn màn hình chết. Bắn lại mỗi 8s cho tới khi xong; đây là
+   * phản hồi rẻ nhất có thể có: không token, không tin rác.
+   */
+  private typingLoop(chatId: string): () => void {
+    void this.zalo.sendTyping(chatId);
+    const t = setInterval(() => void this.zalo.sendTyping(chatId), 8_000);
+    return () => clearInterval(t);
+  }
+
   private async handleAgentTurn(job: Job): Promise<void> {
     const p = job.payload as Record<string, never>;
     const chatId = p.zaloChatId as unknown as string;
 
-    const result = await this.agent.runTurn({
-      conversationId: p.conversationId as unknown as number,
-      zaloChatId: chatId,
-      senderZaloId: p.senderZaloId as unknown as string,
-      senderName: p.senderName as unknown as string,
-      text: (p.text as unknown as string) ?? null,
-      imageUrl: (p.imageUrl as unknown as string) ?? null,
-      imagePath: (p.imagePath as unknown as string) ?? null,
-      imageMime: (p.imageMime as unknown as string) ?? null
-    });
+    const stopTyping = this.typingLoop(chatId);
+    let result: Awaited<ReturnType<AgentService["runTurn"]>>;
+    try {
+      result = await this.agent.runTurn({
+        conversationId: p.conversationId as unknown as number,
+        zaloChatId: chatId,
+        senderZaloId: p.senderZaloId as unknown as string,
+        senderName: p.senderName as unknown as string,
+        text: (p.text as unknown as string) ?? null,
+        imageUrl: (p.imageUrl as unknown as string) ?? null,
+        imagePath: (p.imagePath as unknown as string) ?? null,
+        imageMime: (p.imageMime as unknown as string) ?? null,
+        // Câu báo giữa lượt ("đang lục danh bạ đối tác…") — fire-and-forget,
+        // không ghi vào lịch sử hội thoại vì nó là trạng thái, không phải nội dung
+        onProgress: (text) => void this.zalo.sendRaw(chatId, text)
+      });
+    } finally {
+      stopTyping();
+    }
 
     // Agent có thể trả về nhiều tin khi nó chủ động tách theo từng người/chủ đề.
     // Gửi tuần tự, giãn nhẹ để Zalo giữ đúng thứ tự.
@@ -280,6 +303,23 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
 
     const trip = await this.db.query.trips.findFirst({ where: eq(trips.id, tripId) });
     if (!trip) return;
+
+    /**
+     * Báo mở màn + typing suốt job — deep_plan là quãng im lặng dài nhất hệ
+     * thống (~90-120s đo thật). Nêu rõ ĐANG TÌM GÌ (focus của nhóm) chứ không
+     * phải "đang xử lý" chung chung: người dùng tha thứ cho chờ đợi khi biết
+     * mình đang chờ đúng thứ mình hỏi.
+     */
+    void this.zalo.sendRaw(
+      zaloChatId,
+      `🔎 Mình đang tìm: ${focus.slice(0, 120)}\nSo giá vài nguồn mất tầm 1-2 phút, xong mình gửi liền nha!`
+    );
+    const stopTyping = this.typingLoop(zaloChatId);
+
+    // try/finally BẮT BUỘC: hàm này có nhiều return giữa chừng và có thể ném
+    // lỗi — thiếu finally là interval typing chạy vĩnh viễn, nhóm thấy Zino
+    // "đang gõ" cả đêm.
+    try {
 
     const days = Math.max(
       1,
@@ -370,6 +410,10 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
 
     await this.zalo.sendMarkdown(zaloChatId, `📋 Lịch trình mình vừa research xong đây!\n\n${plan}`);
     await this.conversations.recordOutbound(conversationId, plan);
+
+    } finally {
+      stopTyping();
+    }
   }
 
   /**

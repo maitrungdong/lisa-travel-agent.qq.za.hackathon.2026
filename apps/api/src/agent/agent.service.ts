@@ -52,7 +52,29 @@ export interface AgentTurnInput {
   imageUrl: string | null;
   imagePath: string | null;
   imageMime: string | null;
+  /**
+   * Báo tiến trình GIỮA lượt — worker truyền vào để bắn thẳng về nhóm.
+   *
+   * Vì sao là callback chứ không inject ZaloClient: AgentService cố ý không
+   * biết gì về kênh gửi (nó chỉ trả `replies`), và giữ nguyên điều đó giúp
+   * test không cần mock Zalo. Bên gọi quyết định tiến trình đi đâu.
+   */
+  onProgress?: (text: string) => void;
 }
+
+/**
+ * Câu báo tiến trình theo tool — gửi NGAY khi model quyết định gọi tool đó,
+ * tức là đầu quãng chờ dài nhất (web_search + soạn thẻ còn 10-20s phía sau).
+ *
+ * Chỉ những tool mở ra quãng chờ dài mới có mặt. Tool vài ms (add_expense,
+ * remember...) không nằm đây — báo tiến trình cho việc 5ms là spam.
+ * Mỗi lượt chỉ bắn MỘT câu (câu đầu tiên khớp), xem vòng tool bên dưới.
+ */
+const PROGRESS_LINES: Record<string, string> = {
+  search_partner_oa: "🔎 Mình đang lục danh bạ đối tác Zalo và so giá, đợi mình xíu nha…",
+  planning_agent: "🧠 Mình đang nghiên cứu kỹ phần này, chờ mình chút nha…",
+  settle_expenses: "🧮 Mình đang chốt sổ và tính chia tiền…"
+};
 
 export interface QueuedReply {
   text: string;
@@ -123,6 +145,7 @@ export class AgentService {
 
     // Tool có thể đổi trip active giữa chừng (create_trip) → giữ ở biến ngoài
     let activeTripId = conv.activeTripId;
+    let progressSent = false;
     const queued: QueuedReply[] = [];
     const followUps: FollowUp[] = [];
 
@@ -302,6 +325,22 @@ export class AgentService {
       if (res.stop_reason !== "tool_use" || toolCalls.length === 0) break;
 
       messages.push({ role: "assistant", content: res.content });
+
+      // Một câu báo tiến trình mỗi lượt, bắn khi model vừa chọn tool "chậm".
+      // Đặt TRƯỚC khi thực thi: người dùng thấy phản hồi ở đầu quãng chờ,
+      // không phải cuối. Fire-and-forget — tiến trình không được phép làm
+      // hỏng lượt.
+      if (input.onProgress && !progressSent) {
+        const line = toolCalls.map((c) => PROGRESS_LINES[c.name]).find(Boolean);
+        if (line) {
+          progressSent = true;
+          try {
+            input.onProgress(line);
+          } catch {
+            /* nuốt — tiến trình chỉ là trang trí */
+          }
+        }
+      }
 
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const call of toolCalls) {
