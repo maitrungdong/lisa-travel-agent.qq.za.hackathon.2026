@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/bottom-nav";
+import BookingsPage from "./pages/bookings";
 import ChatPage from "./pages/chat";
 import DebugPage from "./pages/debug";
 import ExpensesPage from "./pages/expenses";
@@ -22,6 +23,8 @@ export default function App() {
           {/* Chat trong app — chỗ duy nhất Zino vừa nói vừa đưa nút bấm */}
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
+          {/* Đặt chỗ — không vào thanh tab (5 mục đã chật), vào từ lối tắt Trang chủ */}
+          <Route path="/bookings" element={<BookingsPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           {/* Concierge Handoff — Zino soạn tin, user bấm gửi sang OA đối tác */}

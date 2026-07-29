@@ -3,6 +3,7 @@ import { AgentService } from "./agent/agent.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { ChatAgent } from "./chat/chat.agent";
+import { BookingsController } from "./bookings/bookings.controller";
 import { ChatController } from "./chat/chat.controller";
 import { DatabaseModule } from "./db/database.module";
 import { DecisionsController } from "./decisions/decisions.controller";
@@ -52,7 +53,8 @@ import { ZaloController } from "./zalo/zalo.controller";
     // J4 — người dùng tự thêm/sửa khoản chi, tick đã trả
     ExpensesController,
     // Chat trong app — nơi Zino vừa nói vừa đưa nút bấm (Bot API không có nút)
-    ChatController
+    ChatController,
+    BookingsController
     /**
      * ĐÃ GỠ `DebugController` (29/07).
      *

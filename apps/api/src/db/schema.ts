@@ -646,3 +646,41 @@ export const chatActions = pgTable(
   },
   (t) => [index("chat_actions_trip_idx").on(t.tripId, t.createdAt)]
 );
+
+/**
+ * Đặt chỗ — phòng, vé xe, vé tham quan.
+ *
+ * Bảng riêng chứ không phải cột thêm vào `events`: `events.status` nói "Zino tự
+ * động hoá tới đâu", còn cái này nói "nhóm đã đặt và trả tiền chưa" và do người
+ * cập nhật. Xem apps/api/src/bookings/booking-rules.ts.
+ */
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: serial("id").primaryKey(),
+    tripId: bigint("trip_id", { mode: "number" })
+      .notNull()
+      .references(() => trips.id),
+    /** Mục lịch trình sinh ra đặt chỗ này. null = đặt chỗ đứng riêng. */
+    eventId: bigint("event_id", { mode: "number" }),
+    /** stay | transport | ticket | other */
+    kind: varchar("kind", { length: 16 }).notNull().default("other"),
+    title: text("title").notNull(),
+    provider: text("provider"),
+    partnerOaId: varchar("partner_oa_id", { length: 64 }),
+    amount: bigint("amount", { mode: "number" }),
+    refCode: varchar("ref_code", { length: 64 }),
+    /** to_book | booked | paid | cancelled */
+    status: varchar("status", { length: 16 }).notNull().default("to_book"),
+    holderZaloId: varchar("holder_zalo_id", { length: 64 }),
+    holderName: text("holder_name"),
+    note: text("note"),
+    /** zino | user */
+    source: varchar("source", { length: 16 }).notNull().default("zino"),
+    createdBy: varchar("created_by", { length: 64 }),
+    updatedBy: varchar("updated_by", { length: 64 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [index("bookings_trip_idx").on(t.tripId, t.status)]
+);

@@ -449,3 +449,41 @@ CREATE INDEX IF NOT EXISTS chat_actions_trip_idx ON chat_actions (trip_id, creat
 -- tự nghĩ ra (không gắn với OA nào) thì không có ảnh, và thẻ vẫn phải đẹp.
 ALTER TABLE decision_options ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE decision_options ADD COLUMN IF NOT EXISTS booking_url text;
+
+-- Đặt chỗ: phòng, vé xe, vé tham quan.
+--
+-- Vì sao BẢNG RIÊNG chứ không thêm cột vào events: `events.status` mang nghĩa
+-- "Zino tự động hoá tới đâu" (pending/done/failed), còn trạng thái đặt chỗ nói
+-- "nhóm đã đặt và trả tiền chưa" và do NGƯỜI cập nhật. Nhét chung một cột thì
+-- một mục `failed` không phân biệt được "Zino đặt hộ không xong" với "nhóm huỷ".
+-- Ngoài ra có đặt chỗ không nằm ở ô nào trong lịch trình: bảo hiểm, đặt cọc.
+CREATE TABLE IF NOT EXISTS bookings (
+  id             serial PRIMARY KEY,
+  trip_id        bigint      NOT NULL REFERENCES trips(id),
+  /** Mục lịch trình sinh ra đặt chỗ này. NULL = đặt chỗ đứng riêng. */
+  event_id       bigint,
+  /** stay | transport | ticket | other */
+  kind           varchar(16) NOT NULL DEFAULT 'other',
+  title          text        NOT NULL,
+  provider       text,
+  partner_oa_id  varchar(64),
+  amount         bigint,
+  ref_code       varchar(64),
+  /** to_book | booked | paid | cancelled */
+  status         varchar(16) NOT NULL DEFAULT 'to_book',
+  holder_zalo_id varchar(64),
+  holder_name    text,
+  note           text,
+  /** zino | user */
+  source         varchar(16) NOT NULL DEFAULT 'zino',
+  created_by     varchar(64),
+  updated_by     varchar(64),
+  updated_at     timestamptz,
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bookings_trip_idx ON bookings (trip_id, status);
+-- Chốt chặn chống trùng ở tầng DB: đồng bộ lại từ lịch trình bao nhiêu lần cũng
+-- chỉ ra một đặt chỗ cho mỗi mục. Partial index để nhiều đặt chỗ tự do (event_id
+-- NULL) vẫn sống chung được.
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_event_uq
+  ON bookings (event_id) WHERE event_id IS NOT NULL;

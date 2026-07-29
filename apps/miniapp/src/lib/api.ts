@@ -231,6 +231,41 @@ export interface Decision {
 }
 
 /* ------------------------------------------------------------------ *
+ * Đặt chỗ — phòng, vé xe, vé tham quan.
+ *
+ * Zino KHÔNG thanh toán hộ được (không có tích hợp cổng thanh toán nào
+ * trong hệ thống), nên đây là sổ theo dõi do người cập nhật bằng nút
+ * bấm. Trạng thái tách hẳn khỏi `TripEvent.status` — cái kia nói "Zino
+ * tự động hoá tới đâu", cái này nói "nhóm đã đặt và trả tiền chưa".
+ * ------------------------------------------------------------------ */
+
+export interface Booking {
+  id: number;
+  tripId: number;
+  eventId: number | null;
+  /** stay | transport | ticket | other */
+  kind: string;
+  title: string;
+  provider: string | null;
+  partnerOaId: string | null;
+  amount: number | null;
+  refCode: string | null;
+  /** to_book | booked | paid | cancelled */
+  status: string;
+  holderZaloId: string | null;
+  holderName: string | null;
+  note: string | null;
+  source: string;
+}
+
+export interface BookingSummary {
+  total: number;
+  done: number;
+  todo: number;
+  percent: number;
+}
+
+/* ------------------------------------------------------------------ *
  * Chat trong app. Zalo Bot API không gửi được nút bấm, nên "thẻ hành
  * động" chỉ tồn tại ở đây. `kind` là tập ĐÓNG — app phải biết cách xử lý
  * mọi giá trị, không để server bịa ra kiểu mới rồi render nút chết.
@@ -318,6 +353,31 @@ export const api = {
   ) =>
     request<ChatActResult>(`/trips/${tripId}/chat/act`, {
       method: "POST",
+      body: JSON.stringify(body)
+    }),
+
+  /** Danh sách đặt chỗ. Server tự đồng bộ từ lịch trình trước khi trả về. */
+  bookings: (tripId: number) =>
+    request<{ bookings: Booking[]; summary: BookingSummary }>(`/trips/${tripId}/bookings`),
+
+  bookingSummary: (tripId: number) =>
+    request<BookingSummary>(`/trips/${tripId}/bookings/summary`),
+
+  setBookingStatus: (
+    id: number,
+    body: { status: string; actorZaloId: string; actorName?: string }
+  ) =>
+    request<{ booking: Booking; changed: boolean }>(`/bookings/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    }),
+
+  patchBooking: (
+    id: number,
+    body: { actorZaloId: string; refCode?: string | null; note?: string | null; amount?: number | null }
+  ) =>
+    request<{ booking: Booking }>(`/bookings/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(body)
     }),
 

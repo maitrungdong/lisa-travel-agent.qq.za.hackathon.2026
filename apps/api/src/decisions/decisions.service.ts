@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { DB, type Database } from "../db/database.module";
+import { shareTripUrl } from "../common/miniapp-link";
 import { activities, conversations, decisionOptions, decisionVotes, decisions, members, trips } from "../db/schema";
 import { ZaloClient } from "../zalo/zalo.client";
 import { decidedMessage } from "./decision.message";
@@ -326,8 +327,8 @@ export class DecisionsService {
     try {
       const chatId = await this.resolveChatId(tripId, conversationId);
       if (!chatId) return;
-      const base = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
-      const appUrl = process.env.ZINO_MINIAPP_URL || `${base}/api/trips/${tripId}/recap.html`;
+      // Một hàm duy nhất dựng link, và nó LUÔN kèm ?trip= — xem common/miniapp-link.ts
+      const appUrl = shareTripUrl(tripId);
       await this.zalo.sendRich(chatId, decidedMessage(view, appUrl));
     } catch (err) {
       this.log.warn(`Không báo được kết quả chốt về nhóm: ${String(err)}`);
