@@ -183,10 +183,35 @@ export class V7Service {
       delete (state as Record<string, unknown>).zino_consecutive_failures;
       await this.save(run.id, { thinState: state });
 
+      const triggered = looksLikeResearchTrigger(job.userMessage);
       this.log.log(
         `${tag} INTAKE → ${intake.status} · target=${intake.route.target}` +
-          (looksLikeResearchTrigger(job.userMessage) ? " · (user gõ đúng trigger)" : "")
+          (triggered ? " · (user gõ đúng trigger)" : "")
       );
+
+      /**
+       * Người dùng gõ đúng trigger mà Intake vẫn không mở cổng Brain.
+       *
+       * Đây là kiểu hỏng ĐẮT NHẤT của hệ này: không có exception, không có job
+       * fail, log nhìn như mọi lượt bình thường — nhưng nhóm ngồi chờ một kết
+       * quả sẽ không bao giờ tới. Đo thật 29/07: ba lượt liên tiếp như vậy, và
+       * Intake còn trả lời "mình sắp xong" trong khi Brain chưa từng chạy.
+       *
+       * Cổng §6.9 có năm điều kiện, cái nào trượt cũng cho ra cùng một kết quả
+       * `deliver`. In cả năm ra để biết phải sửa dòng nào trong prompt — không
+       * có dòng log này thì chỉ còn cách đoán.
+       */
+      if (triggered && intake.route.target === "deliver") {
+        const h = intake.handoff ?? {};
+        this.log.warn(
+          `${tag} ⚠ User đã gõ trigger nhưng Intake vẫn deliver — cổng Brain §6.9 trượt ở:` +
+            ` brief_complete=${h.brief_complete}` +
+            ` · missing_blockers=${JSON.stringify(h.missing_blockers ?? null)}` +
+            ` · owner_confirmation=${JSON.stringify(h.owner_confirmation)}` +
+            ` · scope_summary=${h.scope_summary ? "có" : "TRỐNG"}` +
+            ` · reason_code=${JSON.stringify(intake.route.reason_code)}`
+        );
+      }
 
       /* ---------- 2. Nhánh deliver: Intake tự trả lời, dừng ---------- */
       if (intake.route.target === "deliver") {
