@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { BadRequestException, Body, Controller, Logger, Param, ParseIntPipe, Post } from "@nestjs/common";
 import { z } from "zod";
 import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
+import { ChatAgent } from "./chat.agent";
 import { DecisionsService } from "../decisions/decisions.service";
 import { envStr } from "../pipeline/pipeline.types";
 import { TripsService } from "../trips/trips.service";
@@ -42,8 +43,12 @@ export interface ChatCard {
 export interface ChatReply {
   text: string;
   cards: ChatCard[];
-  /** deterministic = tính bằng code · llm = model diễn giải */
+  /** deterministic = tính bằng code · llm = model viết và qua được cổng kiểm chứng */
   source: "deterministic" | "llm";
+  /** Tool nào đã chạy — hiện lên UI để người dùng biết số liệu lấy từ đâu */
+  usedTools?: string[];
+  /** Có lý do = câu của model đã bị chặn và thay bằng câu tất định */
+  gateBlocked?: string;
 }
 
 /**
@@ -65,20 +70,49 @@ export class ChatController {
 
   constructor(
     private readonly trips: TripsService,
-    private readonly decisions: DecisionsService
+    private readonly decisions: DecisionsService,
+    private readonly agent: ChatAgent
   ) {}
 
+  /**
+   * MODEL CẦM LÁI (mức B).
+   *
+   * Bản trước định tuyến bằng regex rồi mới gọi model cho phần còn lại. Đổi lại
+   * vì regex không hiểu "chuyến này có gì đáng lo không" hay "tối nay ăn ở đâu
+   * rồi nhỉ" — mà đó mới là cách người ta hỏi thật.
+   *
+   * Đánh đổi được kiểm soát bằng ba lớp trong ChatAgent: tool chỉ đọc, model
+   * không làm phép tính, và cổng kiểm chứng số liệu trước khi chữ tới người dùng.
+   *
+   * Agent hỏng vì bất kỳ lý do gì (hết quota, timeout, JSON lỗi) thì rơi về
+   * đúng bộ định tuyến regex cũ — vẫn trả lời được, chỉ kém tự nhiên hơn.
+   */
   @Post("trips/:id/chat")
   async ask(@Param("id", ParseIntPipe) tripId: number, @Body() body: unknown): Promise<ChatReply> {
     const parsed = askSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
     const text = parsed.data.message.trim();
 
-    const intent = routeIntent(text);
-    if (intent === "check") return this.runCheck(tripId);
-    if (intent === "money") return this.runMoney(tripId);
-    if (intent === "today") return this.runToday(tripId);
-    return this.runFreeform(tripId, text);
+    try {
+      const r = await this.agent.run(tripId, text);
+      if (r.gateBlocked) {
+        this.log.warn(`trip#${tripId}: cổng kiểm chứng chặn câu của model (${r.gateBlocked})`);
+      }
+      return {
+        text: r.text,
+        cards: r.cards,
+        source: r.source,
+        usedTools: r.usedTools,
+        gateBlocked: r.gateBlocked
+      };
+    } catch (err) {
+      this.log.error(`Agent hỏng, rơi về định tuyến regex: ${String(err)}`);
+      const intent = routeIntent(text);
+      if (intent === "money") return this.runMoney(tripId);
+      if (intent === "today") return this.runToday(tripId);
+      if (intent === "check") return this.runCheck(tripId);
+      return this.runFreeform(tripId, text);
+    }
   }
 
   /** Gợi ý câu hỏi mở màn — app hiện thành chip bấm được khi chat còn trống. */
@@ -271,7 +305,10 @@ export class ChatController {
   }
 
   /**
-   * Câu hỏi tự do — model trả lời dựa trên dữ liệu chuyến đi, KHÔNG có tool.
+   * ĐƯỜNG LUI — model trả lời không tool, chỉ dùng khi ChatAgent hỏng hẳn.
+   *
+   * Giữ lại thay vì xoá: nó không phụ thuộc tool-use nên còn sống được cả khi
+   * model từ chối gọi tool hoặc SDK đổi hành vi. Rẻ, và là lớp đáy cuối cùng.
    *
    * Không cho tool ở đây là có chủ ý: chat trong app phải trả lời trong một
    * nhịp. Việc cần research hay gọi đối tác thì đẩy về Zino trong nhóm, nơi đã

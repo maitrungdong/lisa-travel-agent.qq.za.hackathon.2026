@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AgentService } from "./agent/agent.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
+import { ChatAgent } from "./chat/chat.agent";
 import { ChatController } from "./chat/chat.controller";
 import { DatabaseModule } from "./db/database.module";
 import { DecisionsController } from "./decisions/decisions.controller";
@@ -67,6 +68,7 @@ import { ZaloController } from "./zalo/zalo.controller";
     TripsService,
     AuthService,
     DecisionsService,
+    ChatAgent,
     ZaloClient,
     ConversationService,
     MediaService,
