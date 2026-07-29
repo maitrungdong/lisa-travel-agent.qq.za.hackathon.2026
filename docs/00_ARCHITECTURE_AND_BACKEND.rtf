@@ -1,0 +1,296 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2867
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fmodern\fcharset0 Courier;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs26 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 # ZA Hackathon Outcome Agent\
+\
+Canonical date: 29/07/2026  \
+Architecture: one product agent, two model roles, one backend entrypoint\
+\
+## Decision\
+\
+Replace:\
+\
+```text\
+Backend \'e2\'86\'92 Intake \'e2\'86\'92 Brain \'e2\'86\'92 Finalizer\
+```\
+\
+with:\
+\
+```text\
+Backend \'e2\'86\'92 Outcome Agent (Claude Sonnet)\
+             \'e2\'94\'9c\'e2\'94\'80 fast path \'e2\'86\'92 final response\
+             \'e2\'94\'94\'e2\'94\'80 conditional reasoning path\
+                  \'e2\'86\'92 Research Brain (Claude Opus sub-agent)\
+                  \'e2\'86\'92 semantic result\
+                  \'e2\'86\'92 Outcome Agent fact-lock + final response\
+```\
+\
+There are two agent definitions:\
+\
+1. `outcome_agent`: Claude Sonnet 5, low effort, no direct tools.\
+2. `research_brain`: Claude Opus 5, medium effort, web and bash tools.\
+\
+The backend invokes only `outcome_agent`. Research Brain is\
+registered in its `multiagent.agents` list and is invoked internally.\
+\
+## Why this boundary\
+\
+The Outcome Agent owns repetitive boundary work:\
+\
+- interpret the latest message against thin state;\
+- collect the minimum viable brief;\
+- manage group research confirmation;\
+- decide whether Brain is necessary;\
+- construct the Brain request;\
+- validate and render the Brain result;\
+- return one final state patch and reply contract.\
+\
+Research Brain owns judgment:\
+\
+- design the decision journey;\
+- research only the current decision slice;\
+- preserve named inventory and evidence;\
+- calculate and reconcile money;\
+- recommend and return semantic decision data.\
+\
+This removes duplicated presentation work from Brain and removes semantic\
+routing from backend.\
+\
+## Import order\
+\
+1. Import `02_planning_brain.json`.\
+2. Copy the created Brain agent ID, such as `agent_...`.\
+3. Generate the Outcome Agent config:\
+\
+```bash\
+node configure_coordinator.js agent_<PLANNING_BRAIN_ID>\
+```\
+\
+4. Import the generated `01_outcome_agent.json`.\
+5. Configure the application to invoke only the Outcome Agent.\
+\
+The template intentionally contains\
+`REPLACE_WITH_PLANNING_BRAIN_AGENT_ID`; do not import it unchanged.\
+\
+## Minimal backend\
+\
+```js\
+async function onMessage(event) \{\
+  const result = JSON.parse(await runManagedAgent(OUTCOME_AGENT_ID, \{\
+    user_message: event.text,\
+    reference_time: event.timestamp,\
+    actor: event.actor,\
+    thin_state: await stateStore.get(event.conversationId),\
+  \}));\
+\
+  assertFinalEnvelope(result);\
+  await stateStore.patch(event.conversationId, result.state_patch);\
+  await stateStore.saveReplyContract(\
+    event.conversationId,\
+    result.reply_contract,\
+  );\
+  await sendToZalo(event.conversationId, result.message_to_user);\
+\}\
+```\
+\
+`assertFinalEnvelope` only checks:\
+\
+- valid JSON;\
+- `status` is `ready` or `blocked`;\
+- non-empty `message_to_user`;\
+- `state_patch`, `reply_contract` and `execution` exist.\
+\
+Backend must not:\
+\
+- classify intent;\
+- inspect brief completeness;\
+- validate group research confirmation;\
+- call Brain or a Finalizer;\
+- merge state from several agent outputs;\
+- run a custom tool loop;\
+- reformat the message.\
+\
+## Technical responsibilities that remain in backend\
+\
+These cannot safely be delegated to a model:\
+\
+- authentication and authorization;\
+- one active managed run per conversation;\
+- idempotency/deduplication by message ID;\
+- timeout and retry policy;\
+- JSON parsing and schema validation;\
+- atomic state persistence;\
+- sending the final Zalo message;\
+- logs, metrics and redaction.\
+\
+Recommended runtime limits:\
+\
+- Outcome Agent fast path: 10\'e2\'80\'9320 seconds.\
+- Outcome Agent with Brain: target 30\'e2\'80\'9360 seconds.\
+- Hard timeout: 90 seconds.\
+- One retry only for transport/runtime failure, never semantic disagreement.\
+\
+## Unified final envelope\
+\
+Every Outcome Agent run returns:\
+\
+```json\
+\{\
+  "status": "ready",\
+  "message_to_user": "One Zalo plain-text message",\
+  "reply_contract": \{\
+    "expected_type": "option_selection",\
+    "valid_values": ["transport_01", "transport_02"],\
+    "examples": ["Ch\'e1\'bb\uc0\u141 n 1", "Ch\'e1\'bb\u141 n 2"],\
+    "expires_with_flow_stage": "choosing_transport"\
+  \},\
+  "state_patch": \{\},\
+  "execution": \{\
+    "brain_used": true,\
+    "brain_task": "initial_research",\
+    "reason_code": "confirmed_scope_requires_research",\
+    "scope_version": 1\
+  \}\
+\}\
+```\
+\
+The backend always handles the same shape, whether Brain was used or not.\
+\
+## Brain internal contract\
+\
+Brain receives a normalized `brain_request` from Outcome Agent and returns:\
+\
+- `answer_payload`: semantic result;\
+- `decision_summary`: recommendation and caveats;\
+- `state_delta`: stable mappings and next decision;\
+- `evidence` and `calculations`;\
+- `quality`.\
+\
+Brain never returns user-facing prose. Outcome Agent fact-locks the result and\
+merges `state_delta` into its one final `state_patch`.\
+\
+## Conditional delegation\
+\
+Sonnet does not call Opus merely because the message is a selection or\
+follow-up. It first checks whether the turn can be handled from the verified\
+thin state.\
+\
+Call Opus only when the turn needs at least one of:\
+\
+- multi-source live research;\
+- recommendation under several binding constraints;\
+- reconciliation of conflicting candidates or evidence;\
+- multi-step planning/replanning with dependencies;\
+- deterministic non-trivial cost/split calculation;\
+- explicit deep research;\
+- judgment that Sonnet cannot provide confidently without guessing.\
+\
+Do not call Opus for:\
+\
+- greeting, clarification, scope confirmation or cancellation;\
+- stable quick QA;\
+- resolving a visible label to a stored stable ID;\
+- repeating or formatting a verified plan;\
+- a follow-up already answered by verified state;\
+- a selection that does not require research for the next decision.\
+\
+## Thin state\
+\
+Persist only:\
+\
+```json\
+\{\
+  "active_flow": \{\
+    "type": "trip",\
+    "stage": "gathering|awaiting_research_confirmation|researching|choosing_transport|choosing_stay|choosing_activity|completed|cancelled",\
+    "scope_version": 1,\
+    "confirmed_scope_version": 1,\
+    "research_status": "idle|running|completed|failed"\
+  \},\
+  "current_brief": \{\},\
+  "unresolved_blockers": [],\
+  "candidate_mappings": [\
+    \{\
+      "decision_id": "transport",\
+      "candidate_id": "transport_01",\
+      "visible_label": "1",\
+      "summary": "short"\
+    \}\
+  ],\
+  "current_decision": \{\},\
+  "selected_id": null,\
+  "last_decision_summary": \{\},\
+  "reply_contract": \{\}\
+\}\
+```\
+\
+Do not persist full evidence pages, web content, transcript or reasoning.\
+\
+## Group research confirmation\
+\
+The exact phrase `B\'e1\'ba\'aeT \'c4\uc0\u144 \'e1\'ba\'a6U RESEARCH` confirms research for the current scope.\
+Any group member may send it. It is not authorization to book, pay, cancel,\
+send a provider message or modify a calendar.\
+\
+Material changes to destination, dates, budget, participants, outcome or hard\
+constraints increment `scope_version` and require confirmation again.\
+\
+## Brain performance\
+\
+Research Brain preserves the v8.1 latency contract:\
+\
+- one turn, one decision slice;\
+- two candidates by default;\
+- initial/replan cap: 2 search, 3 fetch, 1 bash;\
+- follow-up/selection cap: 1 search, 2 fetch, 1 bash;\
+- output target 3.5\'e2\'80\'936K tokens, hard cap 8K;\
+- no pre-research of future shopping slots;\
+- reuse valid state and research only delta.\
+\
+## Nested specialists\
+\
+Do not add specialist agents for the hackathon default. They increase import\
+dependencies and latency.\
+\
+If later needed, specialists must be registered inside Research Brain's managed\
+run. The backend contract stays unchanged. Brain remains accountable for one\
+semantic result and must keep the same tool/output budget.\
+\
+## Failure behavior\
+\
+- Invalid handoff: Brain makes no tool call and returns to Outcome Agent.\
+- Tool unavailable or insufficient evidence: Outcome Agent sends a short,\
+  honest blocked/partial message.\
+- Timeout: backend sends one generic technical fallback and marks\
+  `research_status=failed`; it does not invent a plan.\
+- Malformed JSON: one technical retry, then fail closed.\
+\
+## Migration from v8\
+\
+Delete from runtime:\
+\
+- the separate Finalizer agent;\
+- backend `target=deliver|brain` branching;\
+- backend Brain gate;\
+- backend state merge across Intake, Brain and Finalizer;\
+- `ready_for_finalizer`;\
+- `message_to_user` or `draft_message_to_user` in Brain;\
+- owner identification;\
+- custom-tool adapters.\
+\
+Keep:\
+\
+- minimum viable brief;\
+- group research confirmation;\
+- named inventory;\
+- slot-by-slot decision journey;\
+- deterministic money calculation;\
+- one-decision-slice latency contract;\
+- stable reply mappings.\
+}

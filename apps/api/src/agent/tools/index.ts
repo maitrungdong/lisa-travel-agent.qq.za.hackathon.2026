@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import { groupMemory } from "../../db/schema";
+import { outcomeEnabled } from "../../pipeline/outcome.types";
 import { pipelineEnabled } from "../../pipeline/pipeline.types";
 import { v7Enabled } from "../../pipeline/v7.types";
+import { outcomeTools } from "./outcome.tools";
 import { decisionTools } from "./decision.tools";
 import { moneyTools } from "./money.tools";
 import { partnerTools } from "./partner.tools";
@@ -95,17 +97,36 @@ const asyncTools: ToolDef[] = [
           hint: "Tạo chuyến đi trước bằng create_trip."
         };
       }
-      await ctx.enqueue("deep_plan", {
-        conversationId: ctx.conversationId,
-        zaloChatId: ctx.zaloChatId,
-        tripId: ctx.tripId,
-        focus: input.focus
-      });
+      /**
+       * `dedupeKey` riêng cho research — KHÔNG dùng `ctx.zaloChatId` trần.
+       *
+       * Không có khoá thì `JobsService.claim()` bỏ qua chốt serialize (nó chỉ
+       * áp với job có `dedupe_key`), nên hai lượt research cùng nhóm chạy song
+       * song: tốn gấp đôi tiền và hai kết quả ghi đè nhau xuống DB.
+       *
+       * Nhưng dùng `chatId` trần thì research lại xếp cùng hàng với `agent_turn`
+       * — nghĩa là cả nhóm không chat được suốt 2–4 phút Zino đang tra cứu.
+       * Tiền tố `research:` cho hai loại việc hai hàng riêng: research nối tiếp
+       * research, còn trò chuyện vẫn chạy song song bình thường.
+       */
+      await ctx.enqueue(
+        "deep_plan",
+        {
+          conversationId: ctx.conversationId,
+          zaloChatId: ctx.zaloChatId,
+          tripId: ctx.tripId,
+          focus: input.focus
+        },
+        undefined,
+        `research:${ctx.zaloChatId}`
+      );
       return {
         ok: true,
         message: "Đã nhận việc, đang research nền",
         instruction_for_you:
-          "Báo user là bạn đang tìm hiểu và sẽ gửi kết quả sau ~1 phút, rồi kết thúc lượt."
+          "Báo user là bạn đang tìm hiểu và sẽ gửi kết quả sau vài phút, rồi kết thúc lượt. " +
+          "ĐỪNG hứa con số cụ thể như '1 phút' — tuỳ độ khó mà mất từ một tới bốn phút, " +
+          "hứa ngắn rồi trả lời muộn còn tệ hơn nói chung chung."
       };
     }
   },
@@ -185,7 +206,29 @@ const replyTools: ToolDef[] = [
  * pipeline (đẩy job deep_plan dựng lịch trình), để cả hai thì model có hai
  * đường lên kế hoạch và sẽ chọn ngẫu nhiên.
  */
-export const allTools: ToolDef[] = v7Enabled()
+export const allTools: ToolDef[] = outcomeEnabled()
+  ? [
+      /**
+       * Kiến trúc v4 Agent-only trên Zalo.
+       *
+       * Giữ trọn 21 tool — đây là điểm khác căn bản so với v7, nơi flow hút mọi
+       * tin nhắn và nhóm mất quyền ghi chi phí, đặt nhắc hẹn, đọc ảnh hoá đơn
+       * suốt thời gian flow mở.
+       *
+       * ⚠ BỎ `request_deep_plan`: nó làm gần đúng việc của `planning_agent`
+       * (nghiên cứu rồi đề xuất). Để cả hai thì model có hai đường lên kế hoạch
+       * và sẽ chọn ngẫu nhiên — đúng lỗi đã gặp khi bật pipeline v2.
+       */
+      ...tripTools,
+      ...moneyTools,
+      ...partnerTools,
+      ...decisionTools,
+      ...memoryTools,
+      ...asyncTools.filter((t) => t.name !== "request_deep_plan"),
+      ...outcomeTools,
+      ...replyTools
+    ]
+  : v7Enabled()
   ? [
       // v7: ba agent Intake/Brain/Finalizer. Gỡ request_deep_plan vì Brain
       // làm đúng việc đó, để cả hai thì model chọn ngẫu nhiên.

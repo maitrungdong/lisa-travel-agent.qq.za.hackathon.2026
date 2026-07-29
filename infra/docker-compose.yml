@@ -138,6 +138,15 @@ services:
       ZINO_BATCH_WINDOW_MS: ${ZINO_BATCH_WINDOW_MS:-}
       ZINO_TURN_TIMEOUT_MS: ${ZINO_TURN_TIMEOUT_MS:-}
 
+      # ── Outcome Agent — MỘT agent, Research Brain chạy nội bộ ──
+      # Thay ruột job `deep_plan`. Tắt cờ hoặc bỏ trống ID là rơi về
+      # opus-5 + web_search như cũ, không mất tính năng nào.
+      ZINO_OUTCOME_ENABLED: ${ZINO_OUTCOME_ENABLED:-0}
+      ZINO_AGENT_OUTCOME_ID: ${ZINO_AGENT_OUTCOME_ID:-}
+      # Mặc định 180s. Plan đề xuất 90s nhưng đó là mục tiêu chưa đo — Brain
+      # đơn lẻ đo được 155s và 205s ngày 29/07. Đo bản có trần tool rồi hạ.
+      ZINO_OUTCOME_TIMEOUT_MS: ${ZINO_OUTCOME_TIMEOUT_MS:-}
+
       # ── Pipeline 4 agent (v2) — giữ lại, mặc định tắt ──
       ZINO_PIPELINE_ENABLED: ${ZINO_PIPELINE_ENABLED:-0}
       ZINO_AGENT_A_ID: ${ZINO_AGENT_A_ID:-}

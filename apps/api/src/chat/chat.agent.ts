@@ -5,6 +5,14 @@ import { DecisionsService } from "../decisions/decisions.service";
 import { TripsService } from "../trips/trips.service";
 import { envStr } from "../pipeline/pipeline.types";
 import { gateReply } from "./grounding";
+import {
+  describeProposal,
+  normalizeEvent,
+  normalizeExpense,
+  normalizeNote,
+  type Proposal,
+  type ProposalContext
+} from "./proposals";
 
 /**
  * Zino trong Mini App — model CẦM LÁI, nhưng không được tự tính.
@@ -30,9 +38,13 @@ export interface AgentAction {
     | "open_decision"
     | "add_expense"
     | "scan_qr"
-    | "copy_to_chat";
+    | "copy_to_chat"
+    /** Nút thực thi thật: bấm là server ghi dữ liệu. Kèm `proposal`. */
+    | "confirm";
   label: string;
   value?: string;
+  /** Chỉ có với `kind: "confirm"` — nội dung sắp ghi, server kiểm lại trước khi làm. */
+  proposal?: Proposal;
 }
 
 export interface AgentCard {
@@ -74,7 +86,16 @@ QUY TẮC BẮT BUỘC:
 - Trả lời NGẮN: 2-3 câu, tiếng Việt, thân mật. Không lặp lại danh sách — app đã
   hiện thẻ chi tiết bên dưới câu trả lời của bạn rồi.
 - Việc cần tìm kiếm thật (tìm quán, hỏi đối tác, đặt chỗ) thì nói người dùng
-  nhắn trong nhóm Zalo — ở đó bạn mới có công cụ research.`;
+  nhắn trong nhóm Zalo — ở đó bạn mới có công cụ research.
+
+KHI NGƯỜI DÙNG NHỜ LÀM VIỆC (ghi khoản chi, lưu ghi chú, thêm mục lịch trình):
+- Gọi tool propose_* tương ứng. Tool KHÔNG ghi gì cả, nó chỉ dựng thẻ xác nhận;
+  người dùng bấm nút thì mới thật sự ghi. Nên cứ gọi, đừng hỏi xin phép trước.
+- Tool trả về lỗi thì ĐỌC KỸ lý do rồi hỏi lại người dùng đúng thứ còn thiếu.
+  Đừng đoán bừa cho đủ tham số.
+- Số tiền phải là số nguyên đồng: "350k" là 350000, "2 triệu rưỡi" là 2500000.
+- Sau khi gọi propose_*, trả lời NGẮN GỌN một câu kiểu "Mình soạn sẵn rồi, kiểm
+  lại rồi bấm nút giúp mình nhé" — KHÔNG nhắc lại số liệu, thẻ đã hiện đủ.`;
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -104,6 +125,60 @@ const TOOLS: Anthropic.Tool[] = [
       properties: { date: { type: "string", description: "yyyy-mm-dd, giờ VN" } },
       required: []
     }
+  },
+  {
+    name: "propose_expense",
+    description:
+      "Soạn thẻ xác nhận cho một khoản chi. KHÔNG ghi vào sổ — người dùng bấm nút trên thẻ thì mới ghi. Dùng khi người dùng nói kiểu 'ghi giúp mình 350k tiền ăn tối', 'Linh vừa trả 600k vé'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Chi cho việc gì, vd 'Ăn tối Gành Hào'" },
+        amount: { type: "number", description: "Số tiền, ĐƠN VỊ ĐỒNG, số nguyên. 350k = 350000" },
+        category: {
+          type: "string",
+          enum: ["food", "stay", "transport", "ticket", "shopping", "other"]
+        },
+        paidBy: { type: "string", description: "Tên người trả. Bỏ trống = người đang chat" },
+        splitWith: {
+          type: "array",
+          items: { type: "string" },
+          description: "Tên những người cùng chịu khoản này. Bỏ trống = chia đều cả nhóm"
+        }
+      },
+      required: ["title", "amount"]
+    }
+  },
+  {
+    name: "propose_note",
+    description:
+      "Soạn thẻ xác nhận cho một ghi chú của chuyến đi. KHÔNG ghi ngay. Dùng khi người dùng nói 'nhớ giúp mình...', 'ghi lại là...'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        content: { type: "string" },
+        noteKind: { type: "string", enum: ["note", "tip"] }
+      },
+      required: ["content"]
+    }
+  },
+  {
+    name: "propose_event",
+    description:
+      "Soạn thẻ xác nhận cho một mục lịch trình mới. KHÔNG ghi ngay. Ngày phải nằm trong khoảng chuyến đi — không rõ ngày thì gọi get_trip_overview trước.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        date: { type: "string", description: "yyyy-mm-dd, giờ VN" },
+        time: { type: "string", description: "HH:mm, giờ VN. Bỏ trống = 09:00" },
+        kind: { type: "string", enum: ["stay", "food", "transport", "activity", "other"] },
+        location: { type: "string" },
+        note: { type: "string" },
+        estimatedCost: { type: "number", description: "Chi phí ước tính, đơn vị đồng" }
+      },
+      required: ["title", "date"]
+    }
   }
 ];
 
@@ -117,12 +192,16 @@ export class ChatAgent {
     private readonly decisions: DecisionsService
   ) {}
 
-  async run(tripId: number, question: string): Promise<AgentReply> {
+  async run(tripId: number, question: string, actorZaloId?: string): Promise<AgentReply> {
     const collected: Record<string, unknown> = {};
     const usedTools: string[] = [];
     /** Vấn đề từ lần soát gần nhất — dùng để dựng thẻ hành động sau vòng lặp */
     let issues: Issue[] | null = null;
     let unpaidCount = 0;
+    /** Đề xuất model đã soạn trong lượt này — mỗi cái thành một thẻ có nút thật */
+    const proposals: Proposal[] = [];
+    /** Nạp một lần, dùng cho mọi tool propose_* trong lượt */
+    let ctx: ProposalContext | null = null;
 
     const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
 
@@ -166,7 +245,7 @@ export class ChatAgent {
           }
           return {
             text: gate.text,
-            cards: this.buildCards(issues, unpaidCount),
+            cards: [...this.proposalCards(proposals, ctx), ...this.buildCards(issues, unpaidCount)],
             source: gate.passed ? "llm" : "deterministic",
             usedTools,
             gateBlocked: gate.passed ? undefined : gate.reason
@@ -177,13 +256,21 @@ export class ChatAgent {
 
         const results: Anthropic.ToolResultBlockParam[] = [];
         for (const use of toolUses) {
-          const out = await this.callTool(tripId, use.name, use.input as Record<string, unknown>);
+          if (use.name.startsWith("propose_")) ctx ??= await this.proposalContext(tripId, actorZaloId);
+          const out = await this.callTool(
+            tripId,
+            use.name,
+            use.input as Record<string, unknown>,
+            ctx
+          );
           if (use.name === "run_itinerary_check") {
             issues = (out as { issues: Issue[] }).issues;
           }
           if (use.name === "get_money_status") {
             unpaidCount = (out as { unpaidTransfers: unknown[] }).unpaidTransfers.length;
           }
+          const proposed = (out as { proposal?: Proposal }).proposal;
+          if (proposed) proposals.push(proposed);
           collected[use.name] = out;
           if (!usedTools.includes(use.name)) usedTools.push(use.name);
           results.push({
@@ -199,7 +286,7 @@ export class ChatAgent {
       this.log.warn(`Chat agent chạy quá ${MAX_ROUNDS} vòng cho trip#${tripId}`);
       return {
         text: this.fallbackText(issues, collected),
-        cards: this.buildCards(issues, unpaidCount),
+        cards: [...this.proposalCards(proposals, ctx), ...this.buildCards(issues, unpaidCount)],
         source: "deterministic",
         usedTools
       };

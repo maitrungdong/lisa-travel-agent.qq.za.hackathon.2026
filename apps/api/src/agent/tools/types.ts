@@ -38,6 +38,16 @@ export interface ToolContext {
    * không thể để backend làm.
    */
   queueReply: (text: string, to?: string) => void;
+  /**
+   * Mở (hoặc lấy) hành trình lên kế hoạch v4 của hội thoại này.
+   *
+   * Nằm ở `ToolContext` chứ không để tool tự truy vấn DB: vòng đời run là việc
+   * của backend — một hành trình mỗi hội thoại, ép bằng partial unique index —
+   * còn tool chỉ nên biết "cho tôi hành trình hiện tại".
+   */
+  ensurePlanningRun: () => Promise<{ id: number }>;
+  /** Đóng hành trình đang mở. Trả false nếu không có cái nào. */
+  closePlanningRun: () => Promise<boolean>;
 }
 
 /**

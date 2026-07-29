@@ -7,6 +7,7 @@ import { DB, type Database } from "../db/database.module";
 import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
 import { MerchantAgentService } from "../oa/merchant-agent.service";
+import { OutcomeService, type OutcomeTurnJob } from "../pipeline/outcome.service";
 import { PipelineService, type StepJob } from "../pipeline/pipeline.service";
 import { envStr } from "../pipeline/pipeline.types";
 import { V7Service, type V7TurnJob } from "../pipeline/v7.service";
@@ -69,7 +70,8 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly merchant: MerchantAgentService,
     private readonly trips: TripsService,
     private readonly pipeline: PipelineService,
-    private readonly v7: V7Service
+    private readonly v7: V7Service,
+    private readonly outcome: OutcomeService
   ) {}
 
   onApplicationBootstrap(): void {
@@ -133,6 +135,10 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
             break;
           }
           await this.v7.turn(job.payload as unknown as V7TurnJob);
+          break;
+        case "outcome_turn":
+          // Một lượt hành trình v4. Cờ tắt giữa chừng thì job cũ bị bỏ, không chạy tiếp.
+          await this.outcome.turn(job.payload as unknown as OutcomeTurnJob);
           break;
         case "pipeline_step":
           // Một stage của pipeline 4 agent; stage này xong sẽ tự đẩy stage kế

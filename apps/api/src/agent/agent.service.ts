@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { DB, type Database } from "../db/database.module";
 import { JobsService } from "../jobs/jobs.service";
 import { MediaService, visionMime } from "../media/media.service";
+import { OutcomeService } from "../pipeline/outcome.service";
 import { envInt, envStr } from "../pipeline/pipeline.types";
 import { ConversationService } from "../zalo/conversation.service";
 import { STATIC_SYSTEM, buildDynamicContext } from "./prompt";
@@ -78,7 +79,8 @@ export class AgentService {
     @Inject(DB) private readonly db: Database,
     private readonly conversations: ConversationService,
     private readonly media: MediaService,
-    private readonly jobs: JobsService
+    private readonly jobs: JobsService,
+    private readonly outcome: OutcomeService
   ) {}
 
   async runTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
@@ -114,6 +116,19 @@ export class AgentService {
       },
       queueReply: (text, to) => {
         queued.push({ text, to });
+      },
+      ensurePlanningRun: async () =>
+        this.outcome.ensureRun({
+          conversationId: input.conversationId,
+          zaloChatId: input.zaloChatId,
+          actorId: input.senderZaloId,
+          actorName: input.senderName
+        }),
+      closePlanningRun: async () => {
+        const run = await this.outcome.findActive(input.conversationId);
+        if (!run) return false;
+        await this.outcome.close(run.id, "cancelled");
+        return true;
       }
     } as ToolContext;
 

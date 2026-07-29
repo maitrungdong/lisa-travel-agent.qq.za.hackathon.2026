@@ -19,7 +19,12 @@ export type JobKind =
    */
   | "pipeline_step"
   /** Một lượt v7: Intake → (deliver | Brain → Finalizer). Xem V7Service. */
-  | "v7_turn";
+  | "v7_turn"
+  /**
+   * Một lượt của hành trình v4: chuyển tiếp text vào `v4_outcome_agent` rồi
+   * gửi nguyên văn output về nhóm. Xem OutcomeService.
+   */
+  | "outcome_turn";
 
 export interface Job {
   id: number;

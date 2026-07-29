@@ -17,6 +17,7 @@ import { OaClient } from "./oa/oa.client";
 import { OaController } from "./oa/oa.controller";
 import { OaOAuthService } from "./oa/oauth.service";
 import { ManagedAgentDriver } from "./pipeline/managed-agent.driver";
+import { OutcomeService } from "./pipeline/outcome.service";
 import { PipelineService } from "./pipeline/pipeline.service";
 import { V7ContextService } from "./pipeline/v7.context";
 import { V7Service } from "./pipeline/v7.service";
@@ -83,6 +84,9 @@ import { ZaloController } from "./zalo/zalo.controller";
     PipelineService,
     V7ContextService,
     V7Service,
+    // Research sâu bằng MỘT agent (Brain chạy nội bộ) — thay ruột job deep_plan
+    // khi ZINO_OUTCOME_ENABLED=1. Tắt cờ là rơi về opus-5 + web_search.
+    OutcomeService,
     WorkerService
   ]
 })
