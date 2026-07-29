@@ -11,6 +11,7 @@ import { R43Service } from "../r43/r43.service";
 import { r43EnabledFor } from "../r43/r43.types";
 import { ConversationService } from "./conversation.service";
 import { ZaloClient } from "./zalo.client";
+import { framed } from "../common/image-frame";
 import { normalizeUpdate, stripBotMention, type ZaloUpdate } from "./zalo.types";
 
 /**
@@ -289,15 +290,32 @@ export class ZaloController {
         "Nguồn: Booking.com · 29/07"
     );
 
-    await this.zalo.sendRaw(chatId, "📷 4/4 — loạt 2 thẻ liền nhau (kiểm thứ tự):");
+    await this.zalo.sendRaw(chatId, "📷 4/6 — loạt 2 thẻ liền nhau (kiểm thứ tự):");
     await this.zalo.sendPhotos(chatId, [
       { url: img, caption: "🏨 Thẻ A — Sheraton · 2.850k/đêm\n💬 zalo.me/3556873486474852721" },
       { url: img2, caption: "🏨 Thẻ B — Panama · 1.900k/đêm\n💬 zalo.me/4080288475866618900" }
     ]);
 
+    /**
+     * 5–6: cùng một ảnh gốc qua khung chuẩn hoá (wsrv.nl).
+     * So 5 với 1 là thấy giá trị của ép khung: mọi thẻ cùng tỷ lệ 16:9.
+     * Nếu 5/6 không hiện ảnh → wsrv bị chặn/hỏng, thẻ thật phải dùng URL gốc.
+     */
+    await this.zalo.sendPhoto(
+      chatId,
+      framed(img, "card"),
+      "📷 5/6 — khung CARD 1200×675 (16:9, cắt giữa)\nĐây là khung của Template 1A"
+    );
+    await this.zalo.sendPhoto(
+      chatId,
+      framed(img, "thumb"),
+      "📷 6/6 — khung THUMB 400×400 (vuông)"
+    );
+
     await this.zalo.sendRaw(
       chatId,
-      "📷 Xong. Cần xem: ảnh có nét không · caption dài có bị cắt · [1/2][2/2] có đúng thứ tự A→B không."
+      "📷 Xong. Cần xem: nét không · caption dài có bị cắt · [1/2][2/2] đúng thứ tự A→B không · " +
+        "5 và 6 có hiện ảnh không (không hiện = proxy wsrv bị chặn, dùng ảnh gốc)."
     );
     return true;
   }
