@@ -213,6 +213,7 @@ export class ZaloController {
     text?: string | null;
   }): Promise<boolean> {
     const text = stripBotMention((msg.text ?? "").trim());
+    if (text.startsWith("$$send_photo")) return this.probePhoto(msg.chatId, text);
     if (!text.startsWith("$$send_link")) return false;
 
     // Mặc định: OA Sheraton Nha Trang trong danh sách đối tác
@@ -243,6 +244,60 @@ export class ZaloController {
     await this.zalo.sendRaw(
       msg.chatId,
       "🧪 Xong. Biến thể nào hiện đẹp nhất (có preview ảnh/title?) thì chụp lại — đó sẽ là khuôn thẻ của Zino."
+    );
+    return true;
+  }
+
+  /**
+   * `$$send_photo [url_ảnh]` — thăm dò riêng đường sendPhoto, 4 biến thể:
+   *
+   *   1. Ảnh trần không caption      → Zalo hiển thị ảnh cỡ nào, có bị nén?
+   *   2. Ảnh + caption ngắn 1 dòng   → caption đè lên ảnh hay nằm dưới?
+   *   3. Ảnh + caption thẻ đầy đủ    → chính là khuôn Template 1A định dùng
+   *   4. Loạt 2 ảnh liền nhau        → có gộp album không, thứ tự giữ đúng không,
+   *                                    nhịp 400ms có bị Zalo đảo tin không?
+   *
+   * Câu 4 quan trọng nhất cho demo: 3 thẻ khách sạn là 3 sendPhoto liên tiếp —
+   * nếu Zalo đảo thứ tự thì tin chốt "nghiêng phương án 1" trỏ sai thẻ.
+   *
+   * Truyền URL ảnh riêng để thử ảnh thật của OA (kiểm hotlink có bị chặn):
+   *   $$send_photo https://cdn.khachsan.vn/anh.jpg
+   */
+  private async probePhoto(chatId: string, text: string): Promise<boolean> {
+    const custom = text.split(/\s+/)[1];
+    // Unsplash ổn định, không chặn hotlink — chuẩn đối chứng khi ảnh custom hỏng
+    const img =
+      custom ?? "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=1080&q=80";
+    const img2 = "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=1080&q=80";
+    this.log.log(`$$send_photo → 4 biến thể · ảnh=${img.slice(0, 80)}`);
+
+    await this.zalo.sendRaw(chatId, "📷 1/4 — ảnh trần, không caption:");
+    await this.zalo.sendPhoto(chatId, img);
+
+    await this.zalo.sendPhoto(chatId, img, "📷 2/4 — caption ngắn một dòng");
+
+    await this.zalo.sendPhoto(
+      chatId,
+      img,
+      "📷 3/4 — caption thẻ đầy đủ (khuôn Template 1A)\n\n" +
+        "🏨 Sheraton Nha Trang Hotel & Spa\n" +
+        "2.850.000đ/đêm · 28–30/07 còn phòng\n\n" +
+        "• Mặt biển Trần Phú, hồ bơi vô cực tầng 6\n" +
+        "• Buffet sáng, đón sân bay miễn phí\n" +
+        "• 4.6★ (2.1k đánh giá Google)\n\n" +
+        "💬 Nhắn OA: zalo.me/3556873486474852721\n\n" +
+        "Nguồn: Booking.com · 29/07"
+    );
+
+    await this.zalo.sendRaw(chatId, "📷 4/4 — loạt 2 thẻ liền nhau (kiểm thứ tự):");
+    await this.zalo.sendPhotos(chatId, [
+      { url: img, caption: "🏨 Thẻ A — Sheraton · 2.850k/đêm\n💬 zalo.me/3556873486474852721" },
+      { url: img2, caption: "🏨 Thẻ B — Panama · 1.900k/đêm\n💬 zalo.me/4080288475866618900" }
+    ]);
+
+    await this.zalo.sendRaw(
+      chatId,
+      "📷 Xong. Cần xem: ảnh có nét không · caption dài có bị cắt · [1/2][2/2] có đúng thứ tự A→B không."
     );
     return true;
   }
