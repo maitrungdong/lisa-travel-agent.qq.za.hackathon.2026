@@ -7,6 +7,8 @@ import { PipelineService } from "../pipeline/pipeline.service";
 import { envInt, pipelineEnabled } from "../pipeline/pipeline.types";
 import { V7Service } from "../pipeline/v7.service";
 import { v7Enabled } from "../pipeline/v7.types";
+import { R43Service } from "../r43/r43.service";
+import { r43EnabledFor } from "../r43/r43.types";
 import { ConversationService } from "./conversation.service";
 import { ZaloClient } from "./zalo.client";
 import { normalizeUpdate, stripBotMention, type ZaloUpdate } from "./zalo.types";
@@ -36,7 +38,8 @@ export class ZaloController {
     private readonly zalo: ZaloClient,
     private readonly pipeline: PipelineService,
     private readonly v7: V7Service,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly r43: R43Service
   ) {}
 
   @Post("webhook")
@@ -106,6 +109,44 @@ export class ZaloController {
         msg.chatId,
         "Mình chưa đọc được định dạng này 😅 Bạn gửi giúp mình dạng ảnh hoặc nhắn chữ nhé!"
       );
+      return;
+    }
+
+    /**
+     * R4.3 Memory-first — CỬA VÀO DUY NHẤT của kênh Zalo khi bật cờ.
+     *
+     * Khác mọi cờ trước đó: v7 và v4 chỉ chen ngang khi có flow đang mở, còn
+     * R4.3 thay hẳn `AgentService`. Đó là thiết kế của nó (handoff §1) — backend
+     * không cung cấp tool, không giữ trạng thái, chỉ chuyển tiếp text.
+     *
+     * Mini App KHÔNG bị ảnh hưởng: nó đi qua `ChatController` → `ChatAgent`,
+     * đường hoàn toàn riêng, vẫn dùng 21 tool và Postgres.
+     *
+     * Tắt cờ là mọi thứ về v1 nguyên trạng, không mất dữ liệu.
+     */
+    if (r43EnabledFor(msg.chatId)) {
+      const text = stripBotMention((msg.text ?? "").trim());
+      if (text) {
+        await this.r43.ensureRuntime({
+          zaloGroupId: msg.chatId,
+          conversationId: conv.id,
+          displayName: msg.senderName ?? null
+        });
+        await this.jobs.enqueue(
+          "r43_turn",
+          {
+            zaloGroupId: msg.chatId,
+            conversationId: conv.id,
+            senderZaloId: msg.senderZaloId,
+            senderName: msg.senderName,
+            text,
+            imagePath,
+            imageMime
+          },
+          // §13: một lượt đang chạy mỗi nhóm, tin sau xếp hàng chờ idle
+          { dedupeKey: msg.chatId }
+        );
+      }
       return;
     }
 

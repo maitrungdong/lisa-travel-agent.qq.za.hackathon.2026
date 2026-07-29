@@ -11,7 +11,27 @@ import { loadTripState, toolMap, toolsForApi, type ToolContext } from "./tools";
 
 const MODEL = envStr("ZINO_MODEL", "claude-sonnet-5");
 const MAX_TOOL_ROUNDS = 8;
-const MAX_TOKENS = 2000;
+/**
+ * Đo thật 29/07 18:22: lượt "đưa 3 options villa đây" trả về **0 ký tự** rồi
+ * rơi vào tin lỗi mặc định — 2000 token không đủ để model liệt kê ba phương án
+ * kèm giá và lý do. Nâng lên 4000.
+ *
+ * Không nâng nữa: `max_tokens` là trần, không phải mục tiêu, nhưng nó cũng là
+ * thứ giữ cho câu trả lời không tràn quá 2000 ký tự của Zalo.
+ */
+const MAX_TOKENS = 4000;
+
+/**
+ * Trần độ dài MỘT kết quả tool trước khi đưa lại vào ngữ cảnh.
+ *
+ * Vì sao cần: mỗi vòng tool gửi lại TOÀN BỘ hội thoại cộng mọi kết quả trước
+ * đó. Lượt job#192 ngày 29/07 có 10 lời gọi tool và đọc **109.872 token** —
+ * gấp 7 lần mức thường — rồi chạy mất 196 giây.
+ *
+ * 4000 ký tự đủ cho mọi kết quả hữu ích (danh sách OA, trạng thái chuyến,
+ * bảng chia tiền) mà chặn được trường hợp một tool trả về cả nghìn dòng.
+ */
+const MAX_TOOL_RESULT_CHARS = 4000;
 /**
  * Trần thời gian cho MỘT lượt. Chạm trần thì trả lời tạm còn hơn để user
  * nhìn "đang soạn tin" mãi rồi im — im lặng là kiểu hỏng tệ nhất trong chat.
@@ -43,6 +63,14 @@ export interface QueuedReply {
 export interface AgentTurnResult {
   /** Danh sách tin cần gửi, theo đúng thứ tự. Thường 1 tin; nhiều khi agent tách. */
   replies: QueuedReply[];
+  /**
+   * Tin do BACKEND quyết định gửi thêm, luôn nằm SAU `replies`.
+   *
+   * Không đi chung với `replies` vì hai thứ khác nguồn gốc: `replies` là lời
+   * của model, còn đây là tin hệ thống bắt buộc phải có — ví dụ link Mini App
+   * sau khi tạo chuyến. Trộn chung thì logic "agent tách tin" sẽ nuốt mất chúng.
+   */
+  followUps: string[];
   toolsUsed: string[];
   rounds: number;
 }
@@ -96,6 +124,7 @@ export class AgentService {
     // Tool có thể đổi trip active giữa chừng (create_trip) → giữ ở biến ngoài
     let activeTripId = conv.activeTripId;
     const queued: QueuedReply[] = [];
+    const followUps: string[] = [];
 
     const ctx: ToolContext = {
       db: this.db,
@@ -116,6 +145,11 @@ export class AgentService {
       },
       queueReply: (text, to) => {
         queued.push({ text, to });
+      },
+      pushFollowUp: (text) => {
+        const t = text.trim();
+        // Chống trùng: tool có thể chạy hai lần trong một lượt (model gọi lại)
+        if (t && !followUps.includes(t)) followUps.push(t);
       },
       ensurePlanningRun: async () =>
         this.outcome.ensureRun({
@@ -195,6 +229,24 @@ export class AgentService {
         break;
       }
 
+      /**
+       * Trần thời gian theo NGÂN SÁCH CÒN LẠI của lượt, không phải một số cố định.
+       *
+       * Đo thật 29/07 17:46 — job#192 chạy 196 giây cho một lượt lẽ ra 2–9 giây.
+       * Nguyên nhân: 5 vòng tool làm context phình lên 110K token, mỗi lời gọi
+       * API chậm quá `timeout: 60s` của client, và SDK tự thử lại 2 lần nữa:
+       * 60 + 60 + 76 ≈ 196.
+       *
+       * Trần `TURN_TIMEOUT_MS` bên dưới vô dụng trong tình huống đó vì nó chỉ
+       * được kiểm GIỮA các vòng — không cắt được một lời gọi đang treo.
+       *
+       * Chia cho `maxRetries + 1` để cả cụm thử lại vẫn nằm trong ngân sách.
+       * Nhờ vậy một lượt KHÔNG BAO GIỜ vượt quá `TURN_TIMEOUT_MS`, dù model
+       * chậm cỡ nào.
+       */
+      const remaining = TURN_TIMEOUT_MS - (Date.now() - turnStarted);
+      const perRequestTimeout = Math.max(10_000, Math.floor(remaining / 3));
+
       const res = await this.client.messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
@@ -203,9 +255,24 @@ export class AgentService {
         tools: [
           ...toolsForApi(),
           // Server tool của Anthropic — dùng để tra giá/địa điểm thật, chống bịa số
-          { type: "web_search_20260318", name: "web_search", max_uses: 4 } as never
+          { type: "web_search_20260318", name: "web_search", max_uses: 4 } as never,
+          /**
+           * `web_fetch` — MỞ ĐƯỢC trang, không chỉ đọc đoạn tóm tắt.
+           *
+           * Thiếu nó thì `web_search` chỉ trả về snippet của công cụ tìm kiếm,
+           * và agent phải suy ra giá từ vài dòng mô tả — đúng chỗ số liệu bắt
+           * đầu sai. Có nó thì nó mở thẳng trang khách sạn đọc giá thật.
+           *
+           * Trần 3 lượt: mỗi lần fetch là vài giây mạng cộng thời gian đọc, mà
+           * lượt hội thoại có trần 75s.
+           *
+           * Cả hai server tool đều chạy trên hạ tầng Anthropic nên KHÔNG vướng
+           * allowlist host của environment — thứ đã treo lượt research của v4
+           * suốt 240 giây sáng nay.
+           */
+          { type: "web_fetch_20250910", name: "web_fetch", max_uses: 3 } as never
         ]
-      });
+      }, { timeout: perRequestTimeout });
 
       const u = res.usage as Anthropic.Usage & {
         cache_read_input_tokens?: number;
@@ -241,10 +308,18 @@ export class AgentService {
           this.log.warn(`${tag}   🔧 ${call.name}(${args}) ✗ ${ms}ms — ${String(result.error)}`);
         }
 
+        // Cắt trước khi đưa lại vào ngữ cảnh — xem MAX_TOOL_RESULT_CHARS
+        let payload = JSON.stringify(result);
+        if (payload.length > MAX_TOOL_RESULT_CHARS) {
+          const cut = payload.length - MAX_TOOL_RESULT_CHARS;
+          payload = `${payload.slice(0, MAX_TOOL_RESULT_CHARS)}…[đã cắt ${cut} ký tự]`;
+          this.log.warn(`${tag}   ⚠ kết quả ${call.name} dài ${cut + MAX_TOOL_RESULT_CHARS} ký tự — đã cắt`);
+        }
+
         results.push({
           type: "tool_result",
           tool_use_id: call.id,
-          content: JSON.stringify(result),
+          content: payload,
           is_error: result.ok === false
         });
       }
@@ -275,7 +350,7 @@ export class AgentService {
       replies.push({ text: "Mình đang xử lý hơi lâu 😅 Bạn nhắn lại giúp mình rõ hơn nhé?" });
     }
 
-    return { replies, toolsUsed, rounds };
+    return { replies, followUps, toolsUsed, rounds };
   }
 
   /** Chạy tool, bọc lỗi thành ToolResult để model tự xoay xở. */

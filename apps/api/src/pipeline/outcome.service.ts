@@ -60,6 +60,73 @@ export class OutcomeService {
   ) {}
 
   /* ================================================================ */
+  /* Nghiên cứu MỘT LẦN — dùng cho job deep_plan của v1                */
+  /* ================================================================ */
+
+  /**
+   * Chạy trọn một lượt nghiên cứu rồi trả về text, không để lại trạng thái gì.
+   *
+   * KHÁC `turn()` ở chỗ căn bản: đây không phải hành trình. Không có
+   * `pipeline_runs`, không hút tin nhắn, không cần cửa thoát. `AgentService`
+   * với 21 tool vẫn là cửa trước và không bị đụng tới ở bất kỳ đâu.
+   *
+   * VÌ SAO PHẢI HAI LƯỢT: agent v4 được dựng cho hội thoại — lượt đầu nó chốt
+   * phạm vi rồi xin xác nhận, lượt sau mới nghiên cứu. Đo thật 29/07: gửi
+   * thẳng "BẮT ĐẦU RESEARCH" ngay lượt đầu thì nó từ chối và hỏi lại ngày cụ
+   * thể. Nên ở đây ta tự diễn cả hai lượt bên trong một job, rồi chỉ đẩy kết
+   * quả cuối về nhóm. Người dùng không thấy đoạn bắt tay đó.
+   *
+   * Session bị xoá ngay sau khi xong: mỗi lượt `deep_plan` là một việc độc lập,
+   * giữ lại chỉ tổ thành rác.
+   */
+  async researchOnce(input: { brief: string; focus: string }): Promise<string | null> {
+    const agentId = outcomeAgentId();
+    if (!agentId) return null;
+
+    const traceId = randomUUID();
+    const tag = `[${traceId.slice(0, 8)}]`;
+    let sessionId: string | null = null;
+
+    try {
+      const first = await this.driver.runAgent({
+        agentId,
+        payload: input.brief,
+        timeoutMs: OUTCOME_TIMEOUT_MS,
+        traceId,
+        label: "RESEARCH-brief"
+      });
+      sessionId = first.sessionId;
+      this.log.debug(`${tag} chốt phạm vi ${(first.elapsedMs / 1000).toFixed(1)}s`);
+
+      const second = await this.driver.runAgent({
+        agentId,
+        payload: "BẮT ĐẦU RESEARCH",
+        timeoutMs: OUTCOME_TIMEOUT_MS,
+        traceId,
+        label: "RESEARCH-run",
+        existingSessionId: sessionId
+      });
+
+      const text = assertNonEmptyReply(second.raw);
+      this.log.log(
+        `${tag} RESEARCH xong ${((first.elapsedMs + second.elapsedMs) / 1000).toFixed(1)}s` +
+          ` · ${text.length} ký tự`
+      );
+      return text;
+    } catch (err) {
+      /**
+       * Trả null chứ KHÔNG ném: caller sẽ rơi về opus-5 + web_search.
+       * Nghiên cứu hỏng thì thà có kết quả kém hơn còn hơn không có gì —
+       * nhóm đã được hứa "tí nữa mình gửi" rồi.
+       */
+      this.log.warn(`${tag} agent v4 nghiên cứu hỏng, rơi về opus-5: ${(err as Error).message}`);
+      return null;
+    } finally {
+      if (sessionId) void this.driver.deleteSessions({ [OUTCOME_SESSION_KEY]: sessionId });
+    }
+  }
+
+  /* ================================================================ */
   /* Vòng đời hành trình                                              */
   /* ================================================================ */
 

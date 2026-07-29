@@ -8,6 +8,8 @@ import { activities, reminders, trips } from "../db/schema";
 import { MediaService } from "../media/media.service";
 import { MerchantAgentService } from "../oa/merchant-agent.service";
 import { OutcomeService, type OutcomeTurnJob } from "../pipeline/outcome.service";
+import { deepPlanViaAgent } from "../pipeline/outcome.types";
+import { R43Service, type R43TurnJob } from "../r43/r43.service";
 import { PipelineService, type StepJob } from "../pipeline/pipeline.service";
 import { envStr } from "../pipeline/pipeline.types";
 import { V7Service, type V7TurnJob } from "../pipeline/v7.service";
@@ -15,6 +17,7 @@ import { v7Enabled } from "../pipeline/v7.types";
 import { renderRecapHtml, type RecapPayload } from "../trips/recap";
 import { TripsService } from "../trips/trips.service";
 import { ConversationService } from "../zalo/conversation.service";
+import { chunkMessage } from "../zalo/render";
 import { ZaloClient } from "../zalo/zalo.client";
 import { JobsService, type Job } from "./jobs.service";
 
@@ -71,7 +74,8 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly trips: TripsService,
     private readonly pipeline: PipelineService,
     private readonly v7: V7Service,
-    private readonly outcome: OutcomeService
+    private readonly outcome: OutcomeService,
+    private readonly r43: R43Service
   ) {}
 
   onApplicationBootstrap(): void {
@@ -135,6 +139,10 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
             break;
           }
           await this.v7.turn(job.payload as unknown as V7TurnJob);
+          break;
+        case "r43_turn":
+          // Cờ tắt giữa chừng thì job cũ bị bỏ, không chạy tiếp
+          await this.r43.turn(job.payload as unknown as R43TurnJob);
           break;
         case "outcome_turn":
           // Một lượt hành trình v4. Cờ tắt giữa chừng thì job cũ bị bỏ, không chạy tiếp.
@@ -214,11 +222,39 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       if (i < result.replies.length - 1) await sleep(600);
     }
 
+    /**
+     * Tin hệ thống, gửi SAU lời của agent và luôn là tin RIÊNG.
+     *
+     * Hiện chỉ có link Mini App sau khi tạo chuyến. Tách riêng vì link nằm lẫn
+     * trong đoạn văn thì trôi mất giữa cuộc trò chuyện nhóm, còn đứng một mình
+     * thì ai cũng thấy và bấm được.
+     *
+     * `sendRaw` chứ không `sendMarkdown`: link đã là plain text, cho qua bộ
+     * render markdown chỉ có nguy cơ hỏng URL.
+     */
+    for (const text of result.followUps) {
+      await sleep(600);
+      await this.zalo.sendRaw(chatId, text);
+      await this.conversations.recordOutbound(p.conversationId as unknown as number, text);
+    }
+
     // Lên lịch reflection — nếu nhóm còn nhắn tiếp, job sau sẽ ghi đè kết quả
-    await this.jobs.enqueue(
+    /**
+     * GỘP thay vì tạo job mới mỗi lượt.
+     *
+     * `enqueue` với `dedupeKey` chỉ serialize lúc chạy, KHÔNG chống trùng lúc
+     * xếp hàng — nên nhóm chat 10 lượt là 10 job reflection, tất cả cùng nổ
+     * sau 10 phút rồi cùng thoát ngay vì phiên chưa nguội. Vô hại nhưng bẩn
+     * log và tốn truy vấn.
+     *
+     * `enqueueCoalesced` dời lịch job đang chờ thay vì tạo thêm — đúng ngữ
+     * nghĩa "phản tư một lần sau khi nhóm ngừng nói".
+     */
+    await this.jobs.enqueueCoalesced(
       "reflection",
       { conversationId: p.conversationId },
-      { runAt: new Date(Date.now() + REFLECTION_DELAY_MS), dedupeKey: `reflect:${chatId}` }
+      `reflect:${chatId}`,
+      REFLECTION_DELAY_MS
     );
   }
 
@@ -239,6 +275,47 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       Math.round((trip.endDate.getTime() - trip.startDate.getTime()) / 86_400_000) + 1
     );
 
+    /**
+     * Mượn sức nghiên cứu của agent v4 — có evidence, có inventory thật, có
+     * deep link đặt phòng. Đo thật 29/07: ra khách sạn thật kèm giá đúng đêm
+     * và link Booking.com có sẵn tham số ngày và số người.
+     *
+     * Đây là toàn bộ chỗ v4 chạm vào v1: một job nền, một chiều, sau cờ riêng.
+     * Không có hành trình, không hút tin nhắn, 21 tool không bị đụng.
+     *
+     * Trả null (agent lỗi, timeout, cờ tắt) thì rơi thẳng xuống opus-5 +
+     * web_search bên dưới — đường đã chạy ổn định nhiều tuần.
+     */
+    if (deepPlanViaAgent()) {
+      const brief = [
+        `Lên kế hoạch ${days} ngày cho chuyến "${trip.name}" tới ${trip.destination}.`,
+        `Đi ${trip.startDate.toISOString().slice(0, 10)}, về ${trip.endDate.toISOString().slice(0, 10)}.`,
+        trip.budgetPerPerson
+          ? `Ngân sách ${trip.budgetPerPerson.toLocaleString("vi-VN")}đ/người.`
+          : "",
+        `Yêu cầu riêng: ${focus}`
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const text = await this.outcome.researchOnce({ brief, focus });
+      if (text) {
+        await this.db.insert(activities).values({
+          tripId,
+          kind: "plan",
+          content: "Zino đã research và đề xuất phương án"
+        });
+        // sendRaw chứ không sendMarkdown: output v4 đã là plain text có sẵn
+        // ✓ → ○ và URL; cho qua bộ render markdown là hỏng định dạng nó dựng.
+        for (const part of chunkMessage(text)) {
+          await this.zalo.sendRaw(zaloChatId, part);
+          await this.conversations.recordOutbound(conversationId, part);
+          await sleep(350);
+        }
+        return;
+      }
+    }
+
     const res = await this.anthropic.messages.create({
       model: envStr("ZINO_PLANNER_MODEL", "claude-opus-5"),
       max_tokens: 4000,
@@ -258,7 +335,12 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
             `Yêu cầu riêng: ${focus}`
         }
       ],
-      tools: [{ type: "web_search_20260318", name: "web_search", max_uses: 8 } as never]
+      tools: [
+        { type: "web_search_20260318", name: "web_search", max_uses: 8 } as never,
+        // Job nền không bị trần 75s như lượt hội thoại nên cho fetch rộng tay
+        // hơn — đây mới là chỗ cần đọc trang thật để lấy giá đúng.
+        { type: "web_fetch_20250910", name: "web_fetch", max_uses: 6 } as never
+      ]
     });
 
     const plan = res.content

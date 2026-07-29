@@ -487,3 +487,21 @@ CREATE INDEX IF NOT EXISTS bookings_trip_idx ON bookings (trip_id, status);
 -- NULL) vẫn sống chung được.
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_event_uq
   ON bookings (event_id) WHERE event_id IS NOT NULL;
+
+-- ── R4.3 Memory-first ────────────────────────────────────────────────
+-- Ánh xạ nhóm Zalo sang resource của Claude. Khoá chính theo nhóm là chốt
+-- chặn chống tạo trùng bộ store khi hai webhook đến cùng lúc (handoff §6.1).
+CREATE TABLE IF NOT EXISTS zino_group_runtime (
+  zalo_group_id               varchar(128) PRIMARY KEY,
+  conversation_id             bigint,
+  group_memory_store_id       varchar(128) NOT NULL,
+  active_trip_key             varchar(128) NOT NULL,
+  active_trip_memory_store_id varchar(128) NOT NULL,
+  active_session_id           varchar(128) NOT NULL,
+  outcome_agent_id            varchar(128) NOT NULL,
+  outcome_agent_version       integer,
+  oa_file_id                  varchar(128),
+  status                      varchar(32) NOT NULL DEFAULT 'active',
+  created_at                  timestamptz NOT NULL DEFAULT now(),
+  updated_at                  timestamptz NOT NULL DEFAULT now()
+);

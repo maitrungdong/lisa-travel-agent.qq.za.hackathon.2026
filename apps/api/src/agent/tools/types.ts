@@ -39,6 +39,18 @@ export interface ToolContext {
    */
   queueReply: (text: string, to?: string) => void;
   /**
+   * Gửi thêm MỘT TIN RIÊNG sau câu trả lời của agent.
+   *
+   * Khác `queueReply` ở chỗ căn bản: `queueReply` THAY THẾ câu trả lời của
+   * model (agent chủ động tách tin theo từng người), còn cái này CỘNG THÊM vào
+   * sau. Dùng cho những tin do backend quyết định phải có — ví dụ link Mini App
+   * sau khi tạo chuyến — mà không được phép nuốt mất lời agent vừa nói.
+   *
+   * Tách thành tin riêng là có chủ đích: link nằm lẫn trong đoạn văn thì trôi
+   * mất giữa cuộc trò chuyện nhóm, còn đứng riêng thì ai cũng thấy và bấm được.
+   */
+  pushFollowUp: (text: string) => void;
+  /**
    * Mở (hoặc lấy) hành trình lên kế hoạch v4 của hội thoại này.
    *
    * Nằm ở `ToolContext` chứ không để tool tự truy vấn DB: vòng đời run là việc

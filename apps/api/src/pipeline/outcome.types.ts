@@ -26,6 +26,25 @@ export function outcomeAgentId(): string {
 }
 
 /**
+ * Dùng agent v4 làm bộ máy nghiên cứu cho job `deep_plan` của v1.
+ *
+ * CỜ RIÊNG, cố ý tách khỏi `ZINO_OUTCOME_ENABLED`. Hai thứ khác nhau:
+ *
+ *   ZINO_OUTCOME_ENABLED     → hành trình nhiều lượt hút tin nhắn vào agent
+ *   ZINO_DEEP_PLAN_VIA_AGENT → chỉ mượn sức nghiên cứu, chạy nền, một chiều
+ *
+ * Tách ra để có được thứ tốt nhất của cả hai: v1 giữ nguyên vai cửa trước với
+ * 21 tool và toàn bộ tích hợp DB, còn phần nghiên cứu sâu — có evidence, có
+ * inventory thật, có deep link — thì giao cho agent đã dựng sẵn trên Console.
+ *
+ * Không có hành trình để mà kẹt, vì `deep_plan` xưa nay đã là job nền một
+ * chiều: agent nhận việc, chạy xong tự đẩy kết quả về nhóm.
+ */
+export function deepPlanViaAgent(): boolean {
+  return process.env.ZINO_DEEP_PLAN_VIA_AGENT === "1" && Boolean(outcomeAgentId());
+}
+
+/**
  * Trần thời gian một lượt.
  *
  * §9 nói rapid research là mặc định và một user turn gọi tối đa MỘT Brain run.

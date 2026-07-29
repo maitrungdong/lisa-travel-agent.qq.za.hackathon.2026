@@ -9,6 +9,7 @@ import {
   reminders,
   trips
 } from "../../db/schema";
+import { shareTripUrl } from "../../common/miniapp-link";
 import { S, schema, type ToolContext, type ToolDef, type ToolResult } from "./types";
 
 /** Snapshot đầy đủ của chuyến đi — dùng cho cả tool và cho grounding prompt. */
@@ -78,8 +79,12 @@ export const tripTools: ToolDef[] = [
   {
     name: "get_trip_state",
     description:
-      "Đọc toàn bộ trạng thái chuyến đi đang hoạt động: lịch trình, chi phí, thành viên, ghi chú, ảnh. " +
-      "Gọi khi cần số liệu chính xác hoặc sau khi vừa ghi dữ liệu để xác nhận.",
+      "Đọc lại trạng thái chuyến đi đang hoạt động.\n\n" +
+      "⚠ ĐỪNG GỌI để trả lời câu hỏi về chuyến đi. Toàn bộ trạng thái ĐÃ NẰM SẴN " +
+      "trong phần '🧳 Chuyến đi đang hoạt động' của bối cảnh — gọi tool này chỉ nhân " +
+      "đôi cùng một dữ liệu và làm lượt trả lời chậm thêm khoảng 10 giây.\n\n" +
+      "CHỈ dùng khi: vừa ghi dữ liệu bằng tool khác (create_trip, add_event, add_expense…) " +
+      "và cần đọc lại để xác nhận đã lưu đúng.",
     input_schema: schema({}, []),
     handler: async (_input, ctx) => {
       const state = await loadTripState(ctx);
@@ -142,11 +147,29 @@ export const tripTools: ToolDef[] = [
         content: `Tạo chuyến đi ${trip.name} (${trip.destination})`
       });
 
+      /**
+       * Đẩy link Mini App thành MỘT TIN RIÊNG ngay sau khi chốt chuyến.
+       *
+       * Do backend quyết định, không để model tự nhớ: nó lúc nhớ lúc quên, mà
+       * đây là thời điểm duy nhất cả nhóm cùng chú ý và sẵn sàng mở app.
+       *
+       * `shareTripUrl` lo phần khó — deep link Mini App kèm `?trip=` để mở
+       * đúng chuyến vừa tạo, và rơi về trang tổng kết web nếu chưa cấu hình
+       * `ZINO_MINIAPP_URL`.
+       */
+      ctx.pushFollowUp(
+        `📱 Mở Mini App để xem lịch trình, chi phí và bỏ phiếu cho chuyến "${trip.name}":\n` +
+          shareTripUrl(trip.id)
+      );
+
       return {
         ok: true,
         trip_id: trip.id,
         message: `Đã tạo chuyến "${trip.name}"`,
-        miniapp_url: `${ctx.publicBaseUrl}/trip/${trip.id}/`
+        // Backend đã tự gửi link thành tin riêng — model KHÔNG cần nhắc lại,
+        // nhắc lại là nhóm nhận hai link giống nhau trong hai tin liền nhau.
+        instruction_for_you:
+          "Link Mini App đã được gửi tự động thành một tin riêng. Đừng lặp lại link trong câu trả lời của bạn."
       };
     }
   },
@@ -154,27 +177,62 @@ export const tripTools: ToolDef[] = [
   {
     name: "add_member",
     description:
-      "Thêm thành viên vào chuyến đi. Cần thiết trước khi chia tiền — nếu thiếu người thì chia sai. " +
-      "Nếu chỉ biết tên chưa biết zalo id, để zalo_user_id trùng tên.",
+      "Thêm thành viên vào chuyến đi. Cần thiết trước khi chia tiền — thiếu người thì chia sai.\n" +
+      "THÊM NHIỀU NGƯỜI THÌ GỌI MỘT LẦN với cả danh sách: names=[\"Hà\",\"Nam\",\"Linh\"]. " +
+      "Đừng gọi lặp từng người — mỗi lời gọi là một vòng đi về, sáu người thành sáu vòng.",
     input_schema: schema(
       {
-        display_name: S.str("Tên hiển thị của thành viên"),
+        names: S.arr(
+          { type: "string" },
+          'Danh sách tên hiển thị, vd ["Hà","Nam","Linh"]. Thêm một người thì vẫn dùng mảng một phần tử.'
+        ),
+        display_name: S.str("CŨ — chỉ dùng khi thêm đúng một người và không tiện dựng mảng"),
         zalo_user_id: S.str("Zalo user id nếu biết, không thì để trống")
       },
-      ["display_name"]
+      []
     ),
     handler: async (input, ctx) => {
       const guard = needTrip(ctx);
       if (guard) return guard;
 
-      const id = input.zalo_user_id?.trim() || `name:${input.display_name.trim()}`;
-      await ctx.db
-        .insert(members)
-        .values({ tripId: ctx.tripId!, zaloUserId: id, displayName: input.display_name })
-        .onConflictDoNothing();
+      /**
+       * Nhận cả `names` (mảng) lẫn `display_name` (một người).
+       *
+       * Giữ đường cũ vì đổi schema không đồng nghĩa model đổi thói quen ngay —
+       * prompt cache còn giữ mô tả cũ tới khi hết hạn, và bỏ hẳn `display_name`
+       * là mọi lời gọi theo kiểu cũ đều lỗi.
+       *
+       * Đo thật 29/07 17:41 và 17:44: model gọi `add_member` SÁU LẦN liên tiếp
+       * cho sáu người — sáu vòng đi về, mỗi vòng gửi lại toàn bộ ngữ cảnh.
+       */
+      const raw = Array.isArray(input.names) ? input.names : [];
+      const names = [...raw, input.display_name]
+        .map((n) => String(n ?? "").trim())
+        .filter(Boolean);
+
+      if (!names.length) {
+        return { ok: false, error: "Thiếu tên", hint: 'Truyền names=["Tên A","Tên B"]' };
+      }
+
+      // Một người và biết zalo id thì dùng id thật; nhiều người thì khoá theo tên
+      const rows = names.map((name) => ({
+        tripId: ctx.tripId!,
+        zaloUserId:
+          names.length === 1 && input.zalo_user_id?.trim()
+            ? input.zalo_user_id.trim()
+            : `name:${name}`,
+        displayName: name
+      }));
+
+      await ctx.db.insert(members).values(rows).onConflictDoNothing();
 
       const all = await ctx.db.select().from(members).where(eq(members.tripId, ctx.tripId!));
-      return { ok: true, members: all.map((m) => m.displayName), member_count: all.length };
+      return {
+        ok: true,
+        added: names,
+        members: all.map((m) => m.displayName),
+        member_count: all.length
+      };
     }
   },
 

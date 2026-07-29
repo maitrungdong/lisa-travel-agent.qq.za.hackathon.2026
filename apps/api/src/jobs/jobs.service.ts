@@ -24,7 +24,12 @@ export type JobKind =
    * Một lượt của hành trình v4: chuyển tiếp text vào `v4_outcome_agent` rồi
    * gửi nguyên văn output về nhóm. Xem OutcomeService.
    */
-  | "outcome_turn";
+  | "outcome_turn"
+  /**
+   * Một lượt R4.3 Memory-first trên kênh Zalo: chuyển tiếp text vào session
+   * Outcome, đọc stream, gửi nguyên văn về nhóm. Xem R43Service.
+   */
+  | "r43_turn";
 
 export interface Job {
   id: number;

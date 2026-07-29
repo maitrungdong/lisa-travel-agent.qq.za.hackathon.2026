@@ -684,3 +684,38 @@ export const bookings = pgTable(
   },
   (t) => [index("bookings_trip_idx").on(t.tripId, t.status)]
 );
+
+/* ==================================================================== */
+/* R4.3 Memory-first — ánh xạ nhóm Zalo sang resource của Claude        */
+/* ==================================================================== */
+
+/**
+ * Một dòng cho mỗi nhóm Zalo dùng kiến trúc R4.3.
+ *
+ * VÌ SAO CẦN: `zalo_group_id` chỉ là khoá tra cứu của backend, KHÔNG phải id
+ * của Claude. Claude trả về `memstore_...`, `sesn_...`, `file_...` và ta phải
+ * lưu chúng — handoff §5 nói rõ đừng đi tìm store theo tên hiển thị, vì tên
+ * chỉ để nhìn trên Console và có thể trùng.
+ *
+ * Khoá chính là `zalo_group_id` nên hai webhook đến cùng lúc chỉ tạo được một
+ * dòng; dòng thua cuộc nhận 23505 rồi đọc lại của dòng thắng. Đó là khoá theo
+ * nhóm mà §6.1 yêu cầu, ép bởi DB chứ không phải bởi code nhớ kiểm.
+ *
+ * Phạm vi hackathon: một nhóm một hành trình. Muốn giữ hành trình cũ thì tách
+ * `group` / `trip` / `session` thành ba bảng.
+ */
+export const zinoGroupRuntime = pgTable("zino_group_runtime", {
+  zaloGroupId: varchar("zalo_group_id", { length: 128 }).primaryKey(),
+  conversationId: bigint("conversation_id", { mode: "number" }),
+  groupMemoryStoreId: varchar("group_memory_store_id", { length: 128 }).notNull(),
+  /** Nhãn hành trình do backend đặt, không phải id của Claude */
+  activeTripKey: varchar("active_trip_key", { length: 128 }).notNull(),
+  activeTripMemoryStoreId: varchar("active_trip_memory_store_id", { length: 128 }).notNull(),
+  activeSessionId: varchar("active_session_id", { length: 128 }).notNull(),
+  outcomeAgentId: varchar("outcome_agent_id", { length: 128 }).notNull(),
+  outcomeAgentVersion: integer("outcome_agent_version"),
+  oaFileId: varchar("oa_file_id", { length: 128 }),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});

@@ -1,0 +1,521 @@
+[
+  {
+    "name": "get_trip_state",
+    "description": "Đọc toàn bộ trạng thái chuyến đi đang hoạt động: lịch trình, chi phí, thành viên, ghi chú, ảnh. Gọi khi cần số liệu chính xác hoặc sau khi vừa ghi dữ liệu để xác nhận.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_trip",
+    "description": "Tạo chuyến đi mới cho nhóm. CHỈ gọi khi đã xác nhận với user đủ: điểm đến, ngày đi, ngày về. Sau khi tạo, chuyến này trở thành chuyến đang hoạt động của nhóm.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tên chuyến đi, vd \"Đà Nẵng hè 2026\""
+        },
+        "destination": {
+          "type": "string",
+          "description": "Điểm đến chính, vd \"Đà Nẵng\""
+        },
+        "start_date": {
+          "type": "string",
+          "description": "Ngày bắt đầu (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "end_date": {
+          "type": "string",
+          "description": "Ngày kết thúc (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "member_count": {
+          "type": "integer",
+          "description": "Số người tham gia (nếu user có nói)"
+        },
+        "budget_per_person": {
+          "type": "integer",
+          "description": "Ngân sách dự kiến mỗi người, đơn vị VND (nếu user có nói)"
+        }
+      },
+      "required": [
+        "name",
+        "destination",
+        "start_date",
+        "end_date"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "add_member",
+    "description": "Thêm thành viên vào chuyến đi. Cần thiết trước khi chia tiền — nếu thiếu người thì chia sai. Nếu chỉ biết tên chưa biết zalo id, để zalo_user_id trùng tên.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "description": "Tên hiển thị của thành viên"
+        },
+        "zalo_user_id": {
+          "type": "string",
+          "description": "Zalo user id nếu biết, không thì để trống"
+        }
+      },
+      "required": [
+        "display_name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "add_event",
+    "description": "Thêm một mốc vào lịch trình: chuyến bay, nhận phòng, bữa ăn, hoạt động, di chuyển. Dùng cả khi đọc được thông tin từ ảnh vé/booking.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Tên mốc, vd 'Bay VN123 SGN→DAD'"
+        },
+        "starts_at": {
+          "type": "string",
+          "description": "Thời điểm bắt đầu (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "ends_at": {
+          "type": "string",
+          "description": "Thời điểm kết thúc (nếu có) (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "location": {
+          "type": "string",
+          "description": "Địa điểm"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "flight",
+            "stay",
+            "food",
+            "activity",
+            "transport",
+            "other"
+          ],
+          "description": "Loại mốc lịch trình"
+        },
+        "note": {
+          "type": "string",
+          "description": "Ghi chú thêm: mã đặt chỗ, số ghế, lưu ý"
+        },
+        "estimated_cost": {
+          "type": "integer",
+          "description": "Chi phí ước tính (VND)"
+        }
+      },
+      "required": [
+        "title",
+        "starts_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "add_note",
+    "description": "Ghi nhật ký hành trình: cảm nhận, tip, điều đáng nhớ. Dùng khi user kể chuyện dọc đường hoặc khi bạn muốn lưu lại chi tiết cho trang tổng kết sau này.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Nội dung ghi chú"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "note",
+            "diary",
+            "tip",
+            "highlight"
+          ],
+          "description": "Loại ghi chú"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "add_photo",
+    "description": "Lưu ảnh kỷ niệm vào album chuyến đi. Chỉ gọi khi user vừa gửi ảnh và đó là ảnh kỷ niệm (không phải hoá đơn hay vé). URL ảnh được cung cấp trong nội dung tin nhắn.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL ảnh đã lưu (lấy từ thông tin đính kèm của tin nhắn)"
+        },
+        "caption": {
+          "type": "string",
+          "description": "Chú thích ảnh — viết vui, tự nhiên"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "set_reminder",
+    "description": "Đặt nhắc nhở chủ động — Zino sẽ tự nhắn vào nhóm đúng giờ đó, kể cả khi không ai hỏi. Dùng để nhắc mốc lịch trình tiếp theo, nhắc check-in, nhắc chuẩn bị đồ.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "fire_at": {
+          "type": "string",
+          "description": "Thời điểm gửi nhắc nhở (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Nội dung sẽ nhắn vào nhóm — viết như Zino đang nói"
+        }
+      },
+      "required": [
+        "fire_at",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_trip_status",
+    "description": "Đổi trạng thái chuyến đi: planning (đang lên kế hoạch) → confirmed (đã chốt) → ongoing (đang đi) → done (đã kết thúc). Chuyển sang done khi user nói chuyến đi đã xong.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "planning",
+            "confirmed",
+            "ongoing",
+            "done"
+          ],
+          "description": "Trạng thái mới"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_trips",
+    "description": "Liệt kê các chuyến đi trước đây của nhóm. Dùng khi user nhắc tới chuyến cũ hoặc muốn xem lại.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "add_expense",
+    "description": "Ghi một khoản chi của nhóm. Dùng khi user nói đã trả tiền gì đó, HOẶC khi đọc được từ ảnh hoá đơn. Khi đọc hoá đơn: lấy số ở dòng 'Tổng cộng'/'Thành tiền', KHÔNG cộng từng món. Mặc định chia đều cho cả nhóm; chỉ truyền split_among khi user nói rõ ai chịu khoản này.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Tên khoản chi, vd 'Ăn tối quán Bé Mặn'"
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Số tiền VND, số nguyên (vd 850000, không phải '850k')"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "food",
+            "stay",
+            "transport",
+            "ticket",
+            "shopping",
+            "other"
+          ],
+          "description": "Loại chi phí"
+        },
+        "paid_by_name": {
+          "type": "string",
+          "description": "Tên người đã trả. Bỏ trống = người đang nhắn"
+        },
+        "paid_by_zalo_id": {
+          "type": "string",
+          "description": "Zalo id người trả nếu biết"
+        },
+        "receipt_photo_url": {
+          "type": "string",
+          "description": "URL ảnh hoá đơn nếu khoản này ghi từ ảnh"
+        },
+        "spent_at": {
+          "type": "string",
+          "description": "Thời điểm chi tiêu (mặc định là bây giờ) (ISO 8601, vd 2026-08-12T14:00:00+07:00)"
+        },
+        "split_among": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Danh sách TÊN những người chịu khoản này. Bỏ trống = chia đều cả nhóm"
+        }
+      },
+      "required": [
+        "title",
+        "amount"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_expenses",
+    "description": "Liệt kê tất cả khoản chi của chuyến đi kèm tổng. Dùng khi user hỏi 'tiêu bao nhiêu rồi'.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "settle_expenses",
+    "description": "Tính chia tiền cuối chuyến: ai nợ ai bao nhiêu, với SỐ GIAO DỊCH TỐI THIỂU. LUÔN dùng tool này, TUYỆT ĐỐI không tự cộng trừ trong đầu. Kết quả đã làm tròn 1000đ và bảo toàn tổng tiền.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_partner_oa",
+    "description": "Tìm Official Account đối tác du lịch (khách sạn, tour, nhà hàng, xe) trong mạng lưới của Zino. Dùng khi user cần tìm chỗ ở, chỗ ăn, tour, phương tiện. Kết quả là các OA thật trên Zalo mà user có thể nhắn tin trực tiếp.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string",
+          "description": "Thành phố, vd \"Đà Nẵng\""
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "HOTEL",
+            "TOUR",
+            "FNB",
+            "TRANSPORT",
+            "ACTIVITY"
+          ],
+          "description": "Loại đối tác cần tìm"
+        },
+        "keyword": {
+          "type": "string",
+          "description": "Từ khoá lọc thêm, vd \"gần biển\", \"hồ bơi\", \"hải sản\""
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Số kết quả tối đa, mặc định 3"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "draft_oa_inquiry",
+    "description": "Soạn sẵn tin nhắn hỏi một OA đối tác (hỏi giá, đặt phòng, đặt bàn) và tạo link mở chat. Zino soạn hộ — user chỉ việc đọc lại và bấm Gửi. Gọi sau khi user đã chọn một OA từ kết quả search_partner_oa. Viết tin nhắn ĐẦY ĐỦ: ngày, số người, nhu cầu cụ thể, ngân sách, và các câu hỏi rõ ràng.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "oa_id": {
+          "type": "string",
+          "description": "OA id lấy từ kết quả search_partner_oa"
+        },
+        "message": {
+          "type": "string",
+          "description": "Nội dung tin nhắn hoàn chỉnh gửi cho OA. Lịch sự, đầy đủ thông tin, đánh số các câu hỏi. Đây là tin user sẽ gửi đi nên viết ở ngôi của user."
+        }
+      },
+      "required": [
+        "oa_id",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "propose_options",
+    "description": "Đưa ra 2-4 phương án cho nhóm bình chọn trong Mini App (chọn khách sạn, quán ăn, xe...). Gọi SAU KHI đã research xong và có giá cụ thể. LUÔN nêu lý do mình nghiêng phương án nào — nhóm cần biết mình nghĩ gì, không chỉ danh sách. KHÔNG tự chốt: việc chốt là của người tổ chức, bấm trong app. Mỗi chuyến chỉ có MỘT đề xuất đang mở — còn cái cũ chưa chốt thì nhắc nhóm chốt trước.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Đang chọn cái gì, vd \"Chọn khách sạn\" hoặc \"Quán ăn tối 29/07\""
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "stay",
+            "food",
+            "transport",
+            "activity",
+            "other"
+          ],
+          "description": "Loại quyết định"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Tên ngắn, vd \"Khách sạn Malibu\""
+              },
+              "detail": {
+                "type": "string",
+                "description": "Điểm đáng chú ý, vd \"cách Bãi Sau 400m\""
+              },
+              "price": {
+                "type": "integer",
+                "description": "Giá VND cho cả nhóm, bỏ trống nếu chưa rõ"
+              },
+              "partner_oa_id": {
+                "type": "string",
+                "description": "oa_id nếu là đối tác trong danh bạ"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "additionalProperties": false
+          },
+          "description": "2-4 phương án"
+        },
+        "recommended_index": {
+          "type": "integer",
+          "description": "Vị trí phương án mình nghiêng (0 = phương án đầu)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Vì sao nghiêng phương án đó — nêu cả điểm đánh đổi, đừng chỉ khen"
+        }
+      },
+      "required": [
+        "title",
+        "options",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "check_decision",
+    "description": "Xem đề xuất đang mở: ai đã bình chọn gì, ai chưa, đã chốt chưa. Dùng khi có người hỏi 'chốt chưa', 'ai chọn gì rồi', hoặc trước khi nhắc nhóm.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "remember",
+    "description": "Ghi một điều BỀN VỮNG về nhóm này để nhớ cho những chuyến sau: sở thích du lịch, khẩu vị, dị ứng, ngân sách quen thuộc, thói quen, vai trò từng người. KHÔNG dùng cho chi tiết của một chuyến đi cụ thể (đã có DB lo). Gọi ngay khi phát hiện, đừng đợi cuối hội thoại.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "fact": {
+          "type": "string",
+          "description": "Điều cần nhớ, viết ngắn gọn ở ngôi thứ 3, vd \"Nhóm thích biển hơn núi\""
+        }
+      },
+      "required": [
+        "fact"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "recall",
+    "description": "Đọc lại toàn bộ bộ nhớ dài hạn về nhóm này. Thường không cần gọi vì bộ nhớ đã nằm sẵn trong system prompt — chỉ dùng khi cần kiểm tra lại sau khi vừa ghi.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "request_deep_plan",
+    "description": "Yêu cầu nghiên cứu sâu để dựng lịch trình chi tiết (có tra cứu web giá cả, địa điểm, thời tiết). Mất khoảng 1 phút và chạy nền. SAU KHI gọi tool này: nói với user 'để mình research chút nha, tí nữa mình gửi' rồi KẾT THÚC LƯỢT. Đừng chờ, đừng bịa lịch trình.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "focus": {
+          "type": "string",
+          "description": "Yêu cầu cụ thể của user, vd \"3 ngày Đà Nẵng thiên về ăn uống và biển, tránh dậy sớm\""
+        }
+      },
+      "required": [
+        "focus"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "request_recap",
+    "description": "Dựng trang web tổng kết chuyến đi từ ảnh, ghi chú, lịch trình và chi phí đã lưu. Dùng khi chuyến đi kết thúc và user muốn tổng kết / chia sẻ kỷ niệm. Chạy nền ~1 phút, link sẽ được gửi vào nhóm khi xong.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tone": {
+          "type": "string",
+          "enum": [
+            "vui",
+            "hoài niệm",
+            "gọn gàng"
+          ],
+          "description": "Giọng điệu của trang tổng kết"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "reply",
+    "description": "Gửi MỘT tin trả lời vào nhóm. Dùng khi có nhiều người hỏi cùng lúc và bạn muốn TÁCH thành nhiều tin riêng cho dễ theo dõi.\n\nNguyên tắc tách:\n• Các yêu cầu LIÊN QUAN nhau (cùng chủ đề, bổ sung cho nhau) → gộp một tin duy nhất\n• Các yêu cầu ĐỘC LẬP (người hỏi chỗ ở, người hỏi chia tiền) → mỗi việc một tin, mở đầu bằng tên người hỏi để họ biết đang trả lời ai\n• Chỉ một người nhắn, hoặc mọi thứ cùng một chủ đề → KHÔNG cần gọi tool này, cứ trả lời bình thường bằng văn bản\n\nGọi nhiều lần để gửi nhiều tin. Tin sẽ được gửi theo đúng thứ tự bạn gọi.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Nội dung tin nhắn. Plain text, dưới 2000 ký tự."
+        },
+        "to": {
+          "type": "string",
+          "description": "Tên người mà tin này trả lời — dùng khi tách theo từng người"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

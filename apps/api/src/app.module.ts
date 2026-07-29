@@ -19,6 +19,8 @@ import { OaController } from "./oa/oa.controller";
 import { OaOAuthService } from "./oa/oauth.service";
 import { ManagedAgentDriver } from "./pipeline/managed-agent.driver";
 import { OutcomeService } from "./pipeline/outcome.service";
+import { MemoryClient } from "./r43/memory.client";
+import { R43Service } from "./r43/r43.service";
 import { PipelineService } from "./pipeline/pipeline.service";
 import { V7ContextService } from "./pipeline/v7.context";
 import { V7Service } from "./pipeline/v7.service";
@@ -89,6 +91,10 @@ import { ZaloController } from "./zalo/zalo.controller";
     // Research sâu bằng MỘT agent (Brain chạy nội bộ) — thay ruột job deep_plan
     // khi ZINO_OUTCOME_ENABLED=1. Tắt cờ là rơi về opus-5 + web_search.
     OutcomeService,
+    // R4.3 Memory-first — chỉ kênh Zalo, sau cờ ZINO_R43_ENABLED.
+    // Mini App không đụng tới: nó đi qua ChatController → ChatAgent.
+    MemoryClient,
+    R43Service,
     WorkerService
   ]
 })

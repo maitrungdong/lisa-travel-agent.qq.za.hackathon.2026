@@ -146,6 +146,36 @@ services:
       # Mặc định 180s. Plan đề xuất 90s nhưng đó là mục tiêu chưa đo — Brain
       # đơn lẻ đo được 155s và 205s ngày 29/07. Đo bản có trần tool rồi hạ.
       ZINO_OUTCOME_TIMEOUT_MS: ${ZINO_OUTCOME_TIMEOUT_MS:-}
+      # Mượn agent v4 làm bộ máy nghiên cứu cho job deep_plan của v1.
+      # ĐỘC LẬP với ZINO_OUTCOME_ENABLED: bật cái này thì v1 vẫn là cửa trước
+      # với đủ 21 tool, chỉ phần research chạy nền là đi qua agent.
+      ZINO_DEEP_PLAN_VIA_AGENT: ${ZINO_DEEP_PLAN_VIA_AGENT:-0}
+
+      # ── R4.3 Memory-first — CHỈ kênh Zalo ──
+      # Bật cờ này là Outcome Agent thay hẳn AgentService trên Zalo: không tool,
+      # không ghi DB, trạng thái nằm trong Claude Memory Store.
+      # Mini App KHÔNG ảnh hưởng — nó đi ChatController → ChatAgent, đường riêng.
+      # Tắt cờ là về v1 nguyên trạng, không mất dữ liệu.
+      ZINO_R43_ENABLED: ${ZINO_R43_ENABLED:-0}
+      ZINO_R43_OUTCOME_AGENT_ID: ${ZINO_R43_OUTCOME_AGENT_ID:-}
+      # Chỉ áp R4.3 cho những nhóm liệt kê (chat id, ngăn bằng dấu phẩy).
+      # Bỏ trống = áp cho TẤT CẢ. Dùng để thử R4.3 ở nhóm test mà không đụng
+      # nhóm demo đang chạy v1.
+      ZINO_R43_GROUPS: ${ZINO_R43_GROUPS:-}
+      # Ghim version để rollout có kiểm soát; bỏ trống = luôn bản mới nhất
+      ZINO_R43_OUTCOME_AGENT_VERSION: ${ZINO_R43_OUTCOME_AGENT_VERSION:-}
+      # Bỏ trống thì rơi về ZINO_AGENT_ENV_ID
+      ZINO_R43_ENVIRONMENT_ID: ${ZINO_R43_ENVIRONMENT_ID:-}
+      ZINO_R43_TIMEOUT_MS: ${ZINO_R43_TIMEOUT_MS:-}
+      # Catalog OA upload MỘT LẦN lúc deploy, không phải mỗi nhóm
+      ZINO_OA_FILE_ID: ${ZINO_OA_FILE_ID:-}
+      ZINO_OA_MOUNT_PATH: ${ZINO_OA_MOUNT_PATH:-}
+      # Hai store dựng sẵn cho nhóm demo — đặt thì KHÔNG tạo cặp mới
+      ZINO_DEMO_GROUP_MEMORY_STORE_ID: ${ZINO_DEMO_GROUP_MEMORY_STORE_ID:-}
+      ZINO_DEMO_TRIP_MEMORY_STORE_ID: ${ZINO_DEMO_TRIP_MEMORY_STORE_ID:-}
+      # Doc chính thức nói Memory dùng managed-agents-2026-04-01; handoff của
+      # team nói agent-memory-2026-07-22. Gặp 400 thì đổi ở đây, khỏi build lại.
+      ZINO_MEMORY_BETA: ${ZINO_MEMORY_BETA:-}
 
       # ── Pipeline 4 agent (v2) — giữ lại, mặc định tắt ──
       ZINO_PIPELINE_ENABLED: ${ZINO_PIPELINE_ENABLED:-0}
