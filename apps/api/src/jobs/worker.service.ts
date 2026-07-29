@@ -232,10 +232,21 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
      * `sendRaw` chứ không `sendMarkdown`: link đã là plain text, cho qua bộ
      * render markdown chỉ có nguy cơ hỏng URL.
      */
-    for (const text of result.followUps) {
+    for (const f of result.followUps) {
       await sleep(600);
-      await this.zalo.sendRaw(chatId, text);
-      await this.conversations.recordOutbound(p.conversationId as unknown as number, text);
+      if (f.photoUrl) {
+        // Thẻ ảnh (present_option). sendPhoto không ném lỗi ra ngoài khi Zalo
+        // không fetch được ảnh — nhưng để chắc thẻ không câm, kiểm và rơi về text.
+        try {
+          await this.zalo.sendPhoto(chatId, f.photoUrl, f.text);
+        } catch {
+          this.log.warn(`Ảnh thẻ hỏng, gửi text thay: ${f.photoUrl.slice(0, 80)}`);
+          await this.zalo.sendRaw(chatId, f.text);
+        }
+      } else {
+        await this.zalo.sendRaw(chatId, f.text);
+      }
+      await this.conversations.recordOutbound(p.conversationId as unknown as number, f.text);
     }
 
     // Lên lịch reflection — nếu nhóm còn nhắn tiếp, job sau sẽ ghi đè kết quả

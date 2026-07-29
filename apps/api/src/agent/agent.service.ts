@@ -7,7 +7,7 @@ import { OutcomeService } from "../pipeline/outcome.service";
 import { envInt, envStr } from "../pipeline/pipeline.types";
 import { ConversationService } from "../zalo/conversation.service";
 import { STATIC_SYSTEM, buildDynamicContext } from "./prompt";
-import { loadTripState, toolMap, toolsForApi, type ToolContext } from "./tools";
+import { loadTripState, toolMap, toolsForApi, type FollowUp, type ToolContext } from "./tools";
 
 const MODEL = envStr("ZINO_MODEL", "claude-sonnet-5");
 const MAX_TOOL_ROUNDS = 8;
@@ -70,7 +70,7 @@ export interface AgentTurnResult {
    * của model, còn đây là tin hệ thống bắt buộc phải có — ví dụ link Mini App
    * sau khi tạo chuyến. Trộn chung thì logic "agent tách tin" sẽ nuốt mất chúng.
    */
-  followUps: string[];
+  followUps: FollowUp[];
   toolsUsed: string[];
   rounds: number;
 }
@@ -124,7 +124,7 @@ export class AgentService {
     // Tool có thể đổi trip active giữa chừng (create_trip) → giữ ở biến ngoài
     let activeTripId = conv.activeTripId;
     const queued: QueuedReply[] = [];
-    const followUps: string[] = [];
+    const followUps: FollowUp[] = [];
 
     const ctx: ToolContext = {
       db: this.db,
@@ -149,7 +149,16 @@ export class AgentService {
       pushFollowUp: (text) => {
         const t = text.trim();
         // Chống trùng: tool có thể chạy hai lần trong một lượt (model gọi lại)
-        if (t && !followUps.includes(t)) followUps.push(t);
+        if (t && !followUps.some((f) => f.text === t)) followUps.push({ text: t });
+      },
+      pushCard: (photoUrl, caption) => {
+        const t = caption.trim();
+        const u = photoUrl.trim();
+        if (!t || !u) return;
+        // Chống trùng theo cặp ảnh+caption — model gọi lại present_option là chuyện thường
+        if (!followUps.some((f) => f.text === t && f.photoUrl === u)) {
+          followUps.push({ text: t, photoUrl: u });
+        }
       },
       ensurePlanningRun: async () =>
         this.outcome.ensureRun({

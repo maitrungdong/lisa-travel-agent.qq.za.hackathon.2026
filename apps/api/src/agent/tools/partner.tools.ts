@@ -1,6 +1,12 @@
 import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { framed } from "../../common/image-frame";
 import { activities, partnerOas } from "../../db/schema";
 import { S, schema, type ToolDef } from "./types";
+
+/** Tắt thẻ ảnh khẩn cấp: ZINO_OPTION_CARDS=0 → present_option rơi về thẻ text */
+function cardsEnabled(): boolean {
+  return process.env.ZINO_OPTION_CARDS !== "0";
+}
 
 /**
  * TƯƠNG TÁC HỆ SINH THÁI ZALO OA.
@@ -23,7 +29,8 @@ export const partnerTools: ToolDef[] = [
     name: "search_partner_oa",
     description:
       "Tìm Official Account đối tác du lịch (khách sạn, tour, nhà hàng, xe) trong mạng lưới của Zino. " +
-      "Dùng khi user cần tìm chỗ ở, chỗ ăn, tour, phương tiện. " +
+      "⚠ LUÔN GỌI TOOL NÀY TRƯỚC khi web_search mỗi khi user cần chỗ ở, chỗ ăn, tour, phương tiện — " +
+      "đối tác trong hệ sinh thái Zalo được ưu tiên giới thiệu trước. " +
       "Kết quả là các OA thật trên Zalo mà user có thể nhắn tin trực tiếp.",
     input_schema: schema(
       {
@@ -41,7 +48,13 @@ export const partnerTools: ToolDef[] = [
       const limit = Math.min(Math.max(Number(input.limit) || 3, 1), 8);
       const filters = [];
 
-      if (input.city) filters.push(ilike(partnerOas.city, `%${input.city}%`));
+      // "Toàn quốc" = hãng bay, nhà xe, nền tảng vé — phục vụ mọi thành phố.
+      // Lọc cứng theo city sẽ loại oan Vietjet/Vexere khi user hỏi "xe đi Nha Trang".
+      if (input.city) {
+        filters.push(
+          or(ilike(partnerOas.city, `%${input.city}%`), eq(partnerOas.city, "Toàn quốc"))!
+        );
+      }
       if (input.category) filters.push(eq(partnerOas.category, input.category));
       if (input.keyword) {
         filters.push(
@@ -80,10 +93,90 @@ export const partnerTools: ToolDef[] = [
           description: r.description,
           price_hint: r.priceHint,
           tags: r.tags?.split(",").map((t) => t.trim()) ?? [],
-          zalo_link: r.deeplink ?? `https://zalo.me/${r.oaId}`
+          zalo_link: r.deeplink ?? `https://zalo.me/${r.oaId}`,
+          image_url: r.avatarUrl
         })),
         next_step:
-          "Hỏi user chọn chỗ nào, rồi gọi draft_oa_inquiry để soạn sẵn câu hỏi gửi cho OA đó."
+          "Chọn 2-3 OA hợp nhất. Nếu cần giá/đánh giá mới thì web_search về ĐÚNG những nơi này " +
+          "(không tìm chỗ khác ngoài danh sách khi danh sách đã đủ). " +
+          "Rồi gọi present_option cho TỪNG nơi — mỗi nơi một thẻ, truyền image_url và zalo_link nhận được ở đây. " +
+          "Cuối cùng nhắn một tin chốt: mình nghiêng phương án nào, vì sao, mời nhóm nhắn số để chọn."
+      };
+    }
+  },
+
+  {
+    name: "present_option",
+    /**
+     * Thẻ phương án — khuôn Template 1A/1B, docs/ZALO-MESSAGE-TEMPLATES.md.
+     *
+     * VÌ SAO BACKEND DỰNG CAPTION thay vì để model tự viết: model mỗi lần một
+     * kiểu — lúc có nguồn lúc không, lúc 5 gạch đầu dòng lúc 1. Khuôn cứng ở
+     * đây là thứ giữ cho ba thẻ liền nhau nhìn như MỘT bộ. Model chỉ cung cấp
+     * dữ kiện, không cung cấp bố cục.
+     */
+    description:
+      "Gửi MỘT thẻ giới thiệu phương án (khách sạn/quán/tour/xe) vào nhóm — có ảnh, giá, " +
+      "điểm nổi bật và link Zalo OA. Gọi một lần cho MỖI phương án, tối đa 3 thẻ một lượt. " +
+      "Dữ liệu lấy từ search_partner_oa (image_url, zalo_link) + web_search (giá, đánh giá). " +
+      "Thẻ được gửi TỰ ĐỘNG sau câu trả lời của bạn — đừng lặp lại nội dung thẻ trong lời nói, " +
+      "chỉ cần một tin chốt ngắn: nghiêng phương án nào, mời nhóm nhắn số.",
+    input_schema: schema(
+      {
+        name: S.str('Tên nơi chốn, vd "Sheraton Nha Trang Hotel & Spa"'),
+        price_line: S.str('Dòng giá + tình trạng, vd "2.850.000đ/đêm · 28–30/07 còn phòng"'),
+        bullets: S.arr(
+          { type: "string" },
+          "1-3 điểm nổi bật, mỗi cái một câu ngắn. Quá 3 sẽ bị cắt."
+        ),
+        zalo_link: S.str("Link OA từ search_partner_oa, vd https://zalo.me/123..."),
+        image_url: S.str("image_url từ search_partner_oa, hoặc URL ảnh https khác. Bỏ trống = thẻ chữ."),
+        source: S.str('Nguồn thông tin giá, vd "Booking.com · 29/07". Bỏ trống nếu chỉ từ danh bạ đối tác.'),
+        emoji: S.str("Emoji mở đầu theo loại: 🏨 chỗ ở, 🍜 quán ăn, 🚌 xe, ✈️ bay, 🏄 hoạt động. Mặc định 📍")
+      },
+      ["name", "price_line", "bullets"]
+    ),
+    handler: async (input, ctx) => {
+      const name = String(input.name ?? "").trim();
+      const price = String(input.price_line ?? "").trim();
+      if (!name || !price) return { ok: false, error: "Thiếu name hoặc price_line" };
+
+      const emoji = String(input.emoji ?? "📍").trim() || "📍";
+      const bullets = ((input.bullets ?? []) as string[])
+        .map((b) => String(b).trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      const link = String(input.zalo_link ?? "").trim();
+      const source = String(input.source ?? "").trim();
+      const img = String(input.image_url ?? "").trim();
+
+      // Khuôn 1A: caption dưới ảnh (Zalo cắt ở 1000 ký tự nên khuôn phải gọn)
+      const lines = [
+        `${emoji} ${name}`,
+        price,
+        "",
+        ...bullets.map((b) => `• ${b}`)
+      ];
+      if (link) lines.push("", `💬 Nhắn OA: ${link.replace(/^https?:\/\//, "")}`);
+      if (source) lines.push("", `Nguồn: ${source}`);
+      const caption = lines.join("\n").slice(0, 1000);
+
+      if (img && /^https?:\/\//i.test(img) && cardsEnabled()) {
+        // Ép khung 16:9 để mọi thẻ trong loạt cùng tỷ lệ — xem common/image-frame.ts
+        ctx.pushCard(framed(img, "card"), caption);
+      } else {
+        // Khuôn 1B: thẻ chữ có khung kẻ, bù độ "nổi" khi không có ảnh
+        const bar = "━".repeat(18);
+        ctx.pushFollowUp([bar, `${emoji} ${name.toUpperCase()}`, bar, caption.split("\n").slice(1).join("\n")].join("\n"));
+      }
+
+      return {
+        ok: true,
+        queued: true,
+        card: img ? "photo" : "text",
+        message:
+          "Thẻ sẽ tự gửi sau lời bạn nói. KHÔNG kể lại nội dung thẻ — chỉ chốt ngắn gọn " +
+          "mình nghiêng cái nào và mời nhóm nhắn số."
       };
     }
   },

@@ -1,5 +1,17 @@
 import type { Database } from "../../db/database.module";
 
+/**
+ * Một tin gửi THÊM sau câu trả lời của agent.
+ *
+ * `photoUrl` có mặt → gửi bằng sendPhoto với `text` làm caption (thẻ có ảnh);
+ * vắng mặt → sendRaw như trước. Cùng một hàng đợi để thứ tự thẻ/text giữ đúng
+ * như lúc tool đẩy vào — ảnh và chữ mà đi hai hàng riêng là loạn thứ tự ngay.
+ */
+export interface FollowUp {
+  text: string;
+  photoUrl?: string;
+}
+
 /** Ngữ cảnh được bơm vào mọi tool. Tool KHÔNG tự đọc process.env hay global state. */
 export interface ToolContext {
   db: Database;
@@ -50,6 +62,14 @@ export interface ToolContext {
    * mất giữa cuộc trò chuyện nhóm, còn đứng riêng thì ai cũng thấy và bấm được.
    */
   pushFollowUp: (text: string) => void;
+  /**
+   * Gửi thêm MỘT THẺ ẢNH (sendPhoto + caption) sau câu trả lời.
+   *
+   * Cùng hàng đợi với `pushFollowUp` — thẻ và text giữ nguyên thứ tự đẩy vào.
+   * Caption bị Zalo cắt ở 1000 ký tự; `present_option` là nơi duy nhất nên gọi
+   * cái này để khuôn thẻ thống nhất (xem docs/ZALO-MESSAGE-TEMPLATES.md).
+   */
+  pushCard: (photoUrl: string, caption: string) => void;
   /**
    * Mở (hoặc lấy) hành trình lên kế hoạch v4 của hội thoại này.
    *
