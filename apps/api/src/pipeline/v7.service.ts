@@ -228,7 +228,10 @@ export class V7Service {
         await this.context.persistTurn({
           conversationId: run.conversationId,
           zaloChatId: run.zaloChatId,
-          thinState: state
+          thinState: state,
+          // Brief hay nằm trong `normalized_request` của Intake và không phải
+          // lúc nào cũng được merge vào thin_state
+          extraSources: [intake]
         });
         const next = mapIntakeStatus(intake.status);
         if (intake.status === "blocked") {
@@ -341,6 +344,7 @@ export class V7Service {
         conversationId: run.conversationId,
         zaloChatId: run.zaloChatId,
         thinState: state,
+        extraSources: [intake, brain],
         // `decision_summary` có thể là object (agent thật) chứ không phải chuỗi như §7
         decisionSummary: brainSummaryText(brain.decision_summary)
       });

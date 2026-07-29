@@ -349,6 +349,13 @@ export class ZaloController {
 export function isEscapeCommand(clean: string, raw: string): boolean {
   const EXACT = /^(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu;
   if (EXACT.test(clean)) return true;
+
+  /**
+   * ⚠ `raw` phải là chuỗi TRƯỚC khi gỡ mention. Bản trước kiểm `startsWith("@")`
+   * trên chuỗi đã gỡ, nên điều kiện không bao giờ đúng và cả nhánh này chết —
+   * cùng một lỗi với `looksLikeResearchTrigger`. Giữ tham số `raw` riêng chính
+   * là để không lặp lại.
+   */
   const TAIL = /(^|\s)(tho[áa]t|hu[ỷy] flow|d[ừu]ng flow|\/exit)\.?$/iu;
   return raw.trim().startsWith("@") && TAIL.test(clean);
 }

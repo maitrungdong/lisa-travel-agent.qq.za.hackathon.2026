@@ -180,10 +180,18 @@ export class V7ContextService {
     conversationId: number;
     zaloChatId: string;
     thinState: JsonObject;
+    /**
+     * Nguồn phụ để tìm brief — thường là output thô của Intake.
+     *
+     * Cần vì brief có thể nằm trong `normalized_request` của Intake mà KHÔNG
+     * bao giờ được merge vào `thin_state` (agent tự quyết `state_patch` gồm
+     * những gì). Chỉ nhìn `thin_state` là bỏ sót đúng cái trường hợp đã xảy ra.
+     */
+    extraSources?: unknown[];
     decisionSummary?: string | null;
   }): Promise<void> {
     try {
-      const brief = pick(input.thinState, "current_brief", "trip");
+      const brief = findTripBrief(input.thinState, ...(input.extraSources ?? []));
       const tripId = await this.upsertTrip(input.conversationId, input.zaloChatId, brief);
       if (!tripId) {
         /**
@@ -192,7 +200,14 @@ export class V7ContextService {
          * khác thì Mini App sẽ trống trơn sau mọi lượt research — mà im lặng.
          * Thà ồn ào lúc diễn tập còn hơn phát hiện lúc lên sân khấu.
          */
-        if (brief) this.log.warn(`Có brief nhưng không dựng được chuyến đi: ${JSON.stringify(brief).slice(0, 300)}`);
+        if (brief) {
+          this.log.warn(`Có brief nhưng không dựng được chuyến đi: ${JSON.stringify(brief).slice(0, 400)}`);
+        } else {
+          this.log.warn(
+            "KHÔNG tìm thấy brief chuyến đi trong state — Mini App sẽ trống. " +
+              `Các khoá cấp 1 đang có: ${Object.keys(input.thinState ?? {}).join(", ") || "(rỗng)"}`
+          );
+        }
         return;
       }
 
@@ -303,13 +318,44 @@ export class V7ContextService {
 
 /* ------------------------------------------------------------------ */
 
-function pick(obj: unknown, ...path: string[]): Record<string, unknown> | null {
-  let cur: unknown = obj;
-  for (const p of path) {
-    if (typeof cur !== "object" || cur === null) return null;
-    cur = (cur as Record<string, unknown>)[p];
+/**
+ * Tìm brief chuyến đi bằng HÌNH DẠNG, không bằng tên khoá.
+ *
+ * Bản trước dò cứng `current_brief.trip` theo §5 của doc. Đo thật 29/07 09:22:
+ * agent để brief ở `normalized_request.trip`. Kết quả là `persistTurn` trượt
+ * im lặng suốt — Mini App trống trơn sau một lượt research 4 phút, và chỉ có
+ * duy nhất một dòng `warn` báo hiệu.
+ *
+ * Đây là lần thứ tư trong một ngày hợp đồng trong doc lệch agent thật (§6.8
+ * status, §7 Brain, §6.9 scope_summary, giờ tới §5). Dò theo tên khoá là đặt
+ * cược vào thứ đã sai bốn lần. Dò theo hình dạng thì prompt đổi tên gì cũng
+ * còn chạy: một object vừa có điểm đến vừa có khung ngày thì chỉ có thể là
+ * brief chuyến đi.
+ *
+ * Duyệt theo chiều rộng, giới hạn độ sâu và số node để một `thin_state` phình
+ * to không biến hàm này thành điểm treo.
+ */
+function findTripBrief(...roots: unknown[]): Record<string, unknown> | null {
+  const queue: { node: unknown; depth: number }[] = roots.map((node) => ({ node, depth: 0 }));
+  let visited = 0;
+
+  while (queue.length && visited < 500) {
+    const { node, depth } = queue.shift()!;
+    if (!node || typeof node !== "object" || depth > 6) continue;
+    visited++;
+
+    if (!Array.isArray(node)) {
+      const o = node as Record<string, unknown>;
+      const hasDest = o.destinations !== undefined || o.destination !== undefined;
+      const hasWindow = o.date_window !== undefined || o.dates !== undefined;
+      if (hasDest && hasWindow) return o;
+    }
+
+    for (const child of Object.values(node as Record<string, unknown>)) {
+      if (child && typeof child === "object") queue.push({ node: child, depth: depth + 1 });
+    }
   }
-  return typeof cur === "object" && cur !== null ? (cur as Record<string, unknown>) : null;
+  return null;
 }
 
 function asString(v: unknown): string | null {
