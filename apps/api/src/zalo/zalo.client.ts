@@ -116,6 +116,19 @@ export class ZaloClient {
     return sent;
   }
 
+  /**
+   * Gửi sticker theo ID.
+   *
+   * ID hợp lệ KHÔNG có trong tài liệu Zalo — cách duy nhất để có là bắt từ
+   * webhook: người dùng gửi sticker cho bot, `message.sticker` chính là ID
+   * dùng lại được (controller in ra log dòng "Sticker nhận được: ...").
+   * Gửi ID không tồn tại thì Zalo lặng lẽ từ chối — vô hại nhưng không có gì
+   * hiện ra, nên đừng dựa vào sticker cho nội dung quan trọng.
+   */
+  async sendSticker(chatId: string, stickerId: string): Promise<void> {
+    await this.call("sendSticker", { chat_id: chatId, sticker: stickerId });
+  }
+
   /** photoUrl PHẢI là URL https công khai — Zalo tự đi fetch. */
   async sendPhoto(chatId: string, photoUrl: string, caption?: string): Promise<void> {
     await this.call("sendPhoto", {

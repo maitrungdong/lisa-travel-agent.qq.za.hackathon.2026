@@ -1,0 +1,37 @@
+{
+  "_readme": [
+    "Danh mục bộ sticker Zalo — cào từ stickers.zaloapp.com ngày 30/07/2026.",
+    "",
+    "⚠ GIỚI HẠN QUAN TRỌNG: đây là ID của BỘ (set), KHÔNG phải ID từng sticker.",
+    "Trang detail render danh sách sticker bằng JavaScript nên fetch tĩnh không",
+    "lấy được ID lẻ. `sendSticker` của Bot API cần ID sticker LẺ.",
+    "",
+    "Hai đường lấy ID lẻ đã xác minh được về mặt cơ chế:",
+    "  1. Webhook: người dùng gửi sticker cho bot → `message.sticker` trong",
+    "     payload chính là ID dùng lại được cho sendSticker. Đây là nguồn DUY",
+    "     NHẤT chắc chắn đúng định dạng Bot API chấp nhận.",
+    "  2. Chrome: mở trang detail bằng trình duyệt thật, đọc DOM lấy eid từng",
+    "     sticker. ⚠ CHƯA XÁC MINH eid của store có trùng hệ ID mà sendSticker",
+    "     nhận hay không — phải test một phát trước khi tin.",
+    "",
+    "Cách dùng bộ: mở `zalo_me_link` trên điện thoại → tải bộ về Zalo → gửi",
+    "một sticker vào nhóm test → lấy ID từ webhook."
+  ],
+  "scraped_at": "2026-07-30",
+  "source": "https://stickers.zaloapp.com/oa/detail",
+  "sets": [
+    { "cid": "743df4e6c8a321fd78b2", "set_id": 12556, "name": "Zapy Công Sở", "count": 24, "zalo_me_link": "https://zalo.me/qr/jp/yfxsibokuv", "thumb": "https://zalo-api.zadn.vn/d/c/d/3/f/12556/icon_pre/zapycongso_thumb.png" },
+    { "cid": "5082f258ce1d27437e0c", "set_id": 12334, "name": "Hổ Béo Hằng Ngày 01", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/vywbdzox0f", "thumb": "https://zalo-api.zadn.vn/1/2/0/7/0/12334/icon_pre/hobeohangngay01_thumb.png" },
+    { "cid": "4662eaa7d6e23fbc66f3", "set_id": 12064, "name": "Truyện Cổ Remix", "count": 15, "zalo_me_link": "https://zalo.me/qr/jp/qzkhfstv5x", "thumb": "https://zalo-api.zadn.vn/a/1/5/9/b/12064/icon_pre/truyencoremix_thumb.png" },
+    { "cid": "b3fe223b1e7ef720ae6f", "set_id": 12061, "name": "I Am Binie", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/af2au1rud4", "thumb": "https://zalo-api.zadn.vn/2/5/d/0/a/12061/icon_pre/iambinie_thumb.png" },
+    { "cid": "6f1c41d87d9d94c3cd8c", "set_id": 11938, "name": "Moca Chó Điên", "count": 20, "zalo_me_link": "https://zalo.me/qr/jp/bwdy9ha1xe", "thumb": "https://zalo-api.zadn.vn/6/b/0/6/1/11938/icon_pre/mocachodien_thumb.png" },
+    { "cid": "c3093dca018fe8d1b19e", "set_id": 10610, "name": "Ogu Mỏ Vịt", "count": 20, "zalo_me_link": "https://zalo.me/qr/jp/sd22vcwzmk", "thumb": "https://zalo-api.zadn.vn/5/b/7/0/8/10610/icon_pre/movit_thumb.png" },
+    { "cid": "98ec892eb56b5c35057a", "set_id": 10397, "name": "Quỳnh Aka Nghỉ Lễ", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/t4shieuaas", "thumb": "https://zalo-api.zadn.vn/7/6/8/8/d/10397/icon_pre/aka_thumb.png" },
+    { "cid": "ca7873ba4fffa6a1ffee", "set_id": 10293, "name": "Quỳnh Aka 2", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/fjygu0njfh", "thumb": "https://zalo-api.zadn.vn/3/7/f/2/f/10293/icon_pre/aka_thumb.png" },
+    { "cid": "3883b7418b04625a3b15", "set_id": 10243, "name": "Rồng Vàng Voice", "count": 13, "zalo_me_link": "https://zalo.me/qr/jp/aduylsv2t5", "thumb": "https://zalo-api.zadn.vn/a/5/6/e/e/10243/icon_pre/rongvoice_thumb.png" }
+  ],
+  "captured_sticker_ids": {
+    "_note": "Điền dần khi bắt được từ webhook: { \"id\": \"...\", \"set\": \"...\", \"mô_tả\": \"vd cười, chờ đợi, ăn mừng\" }",
+    "ids": []
+  }
+}

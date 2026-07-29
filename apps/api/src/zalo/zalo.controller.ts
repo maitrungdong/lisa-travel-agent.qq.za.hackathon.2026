@@ -101,8 +101,12 @@ export class ZaloController {
     // là do Zalo khẳng định — đó là toàn bộ chỗ dựa của cơ chế liên kết.
     if (await this.tryRedeemLinkCode(conv.id, msg)) return;
 
-    // Sticker đơn thuần: trả lời rẻ tiền, không gọi model
+    // Sticker đơn thuần: trả lời rẻ tiền, không gọi model.
+    // In ID ra log — webhook là nguồn sticker ID hợp lệ DUY NHẤT (tài liệu
+    // Zalo không công bố danh sách, ID trên sticker store chưa chắc cùng hệ).
+    // Lấy ID từ đây bỏ vào ZINO_STICKER_* để Zino gửi lại được.
     if (msg.eventName === "message.sticker.received" && !msg.text) {
+      this.log.log(`Sticker nhận được: ${msg.stickerId}`);
       await this.zalo.sendRaw(msg.chatId, "😄");
       return;
     }
@@ -215,6 +219,20 @@ export class ZaloController {
   }): Promise<boolean> {
     const text = stripBotMention((msg.text ?? "").trim());
     if (text.startsWith("$$send_photo")) return this.probePhoto(msg.chatId, text);
+    // `$$send_sticker <id>` — kiểm một sticker ID có gửi được không.
+    // Zalo từ chối ID sai một cách IM LẶNG, nên "thấy sticker hiện = ID đúng,
+    // không thấy gì = ID sai" chính là toàn bộ phép thử.
+    if (text.startsWith("$$send_sticker")) {
+      const sid = text.split(/\s+/)[1];
+      if (!sid) {
+        await this.zalo.sendRaw(msg.chatId, "Cú pháp: $$send_sticker <id> (lấy id từ log khi ai đó gửi sticker cho bot)");
+        return true;
+      }
+      this.log.log(`$$send_sticker → thử id ${sid}`);
+      await this.zalo.sendSticker(msg.chatId, sid);
+      await this.zalo.sendRaw(msg.chatId, `🧪 Đã gọi sendSticker(${sid}) — thấy sticker phía trên là ID dùng được, không thấy là ID sai.`);
+      return true;
+    }
     if (!text.startsWith("$$send_link")) return false;
 
     // Mặc định: OA Sheraton Nha Trang trong danh sách đối tác

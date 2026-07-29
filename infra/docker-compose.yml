@@ -132,6 +132,8 @@ services:
       ZINO_REFLECTION_MODEL: ${ZINO_REFLECTION_MODEL:-}
       ZINO_MERCHANT_MODEL: ${ZINO_MERCHANT_MODEL:-}
       ZINO_CHAT_MODEL: ${ZINO_CHAT_MODEL:-}
+      # Sticker "đang nghĩ" lúc deep_plan — ID lấy từ log "Sticker nhận được"
+      ZINO_STICKER_THINKING: ${ZINO_STICKER_THINKING:-}
       # Link Mini App gửi kèm khi nhóm chốt một quyết định
       ZINO_MINIAPP_URL: ${ZINO_MINIAPP_URL:-}
       # Cửa sổ gộp tin (1200ms) và trần thời gian một lượt (75s)

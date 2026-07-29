@@ -314,6 +314,10 @@ export class WorkerService implements OnApplicationBootstrap, OnModuleDestroy {
       zaloChatId,
       `🔎 Mình đang tìm: ${focus.slice(0, 120)}\nSo giá vài nguồn mất tầm 1-2 phút, xong mình gửi liền nha!`
     );
+    // Sticker "đang nghĩ" — chỉ khi đã bắt được ID hợp lệ từ webhook và đặt
+    // vào env. Không đặt = không gửi gì, vô hại. envStr vì compose ghi ${VAR:-}.
+    const thinkingSticker = envStr("ZINO_STICKER_THINKING", "");
+    if (thinkingSticker) void this.zalo.sendSticker(zaloChatId, thinkingSticker);
     const stopTyping = this.typingLoop(zaloChatId);
 
     // try/finally BẮT BUỘC: hàm này có nhiều return giữa chừng và có thể ném
