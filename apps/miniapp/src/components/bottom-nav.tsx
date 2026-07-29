@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { Bot, CalendarDays, Home, Images, Wallet } from "lucide-react";
+import { useTripSearch } from "../lib/active-trip";
 import { cn } from "../lib/utils";
 
 /**
@@ -18,13 +19,16 @@ const tabs = [
 ];
 
 export function BottomNav() {
+  // Mang `?trip=` sang tab mới. Không có dòng này thì URL sau khi chuyển tab
+  // trở nên rỗng nghĩa — copy ra gửi cho người khác là họ mở nhầm chuyến.
+  const search = useTripSearch();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-md">
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
-            to={to}
+            to={{ pathname: to, search }}
             end={to === "/"}
             className={({ isActive }) =>
               cn(

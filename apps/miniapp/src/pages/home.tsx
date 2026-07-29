@@ -10,6 +10,7 @@ import {
   Store,
   Wallet
 } from "lucide-react";
+import { useTripSearch } from "../lib/active-trip";
 import { api, recapPageUrl, type Activity, type Decision } from "../lib/api";
 import { DecisionCard } from "../components/decision-card";
 import { AUTH_ENABLED, DEBUG_UI } from "../lib/flags";
@@ -35,6 +36,8 @@ const ACTIVITY_ICON: Record<string, string> = {
 
 export default function HomePage() {
   const [user, setUser] = useState<ZaloUser | null>(null);
+  // Lối tắt sang tab khác phải mang theo chuyến đang xem, xem `useTripSearch`.
+  const tripSearch = useTripSearch();
   const { data, loading, error, isEmpty, reload } = useRecap();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -273,7 +276,7 @@ export default function HomePage() {
         ].map(({ to, icon: Icon, label, sub }) => (
           <Link
             key={to}
-            to={to}
+            to={{ pathname: to, search: tripSearch }}
             className="flex flex-col items-center gap-1 rounded-lg border border-border bg-card py-3 active:bg-muted"
           >
             <Icon size={18} className="text-primary" />
@@ -288,7 +291,10 @@ export default function HomePage() {
         <section className="space-y-2">
           <SectionTitle
             action={
-              <Link to="/itinerary" className="text-xs font-medium text-primary">
+              <Link
+                to={{ pathname: "/itinerary", search: tripSearch }}
+                className="text-xs font-medium text-primary"
+              >
                 Xem tất cả
               </Link>
             }

@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { api, type TripSummary } from "./api";
+import { pickTripId } from "./trip-select";
 
 /**
  * Chuyến đang mở nằm ở `?trip=<id>` trên URL, không ở state của React.
@@ -17,6 +18,31 @@ export function useTripParam(): string | null {
   // Cố tình KHÔNG phụ thuộc cả chuỗi `search`: `/expenses?add=1` cũng làm nó
   // đổi, mà mở form nhập chi phí thì không việc gì phải tải lại chuyến đi.
   return new URLSearchParams(search).get("trip");
+}
+
+/**
+ * Chuyến đã chọn gần nhất trong phiên này.
+ *
+ * Vì sao cần, dù URL đã là nguồn sự thật: điều hướng trong app làm RƠI query.
+ * `<NavLink to="/itinerary">` của thanh tab dựng URL mới không có `?trip=`, nên
+ * chuyển tab là mất chuyến đang chọn và rơi về chuyến mới nhất. Bản đầu tôi
+ * chọn URL làm nguồn sự thật mà không rà lại 9 chỗ điều hướng — chính là lỗi này.
+ *
+ * Có thể đi vá từng chỗ, nhưng chỗ thứ mười thêm vào tuần sau sẽ lại quên. Nên
+ * quy tắc đặt ở một chỗ: URL có `?trip=` thì URL thắng; không có thì dùng lại
+ * lựa chọn gần nhất; chưa chọn bao giờ mới lấy chuyến mới nhất. Vá link chỉ để
+ * URL còn chia sẻ được, không phải để chương trình chạy đúng.
+ */
+let lastResolved: number | null = null;
+
+/**
+ * Query cần gắn vào link nội bộ để URL không bị rỗng nghĩa khi chia sẻ.
+ * Trả về "" khi chưa biết chuyến nào — lúc đó `resolveActiveTrip` lo phần đúng.
+ */
+export function useTripSearch(): string {
+  const param = useTripParam();
+  if (param) return `?trip=${param}`;
+  return lastResolved != null ? `?trip=${lastResolved}` : "";
 }
 
 /**
@@ -57,7 +83,10 @@ export function invalidateTrips(): void {
 export async function resolveActiveTrip(): Promise<number | null> {
   const trips = await loadTrips();
   const fromUrl = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("trip");
-  const wanted = Number(fromUrl);
-  if (fromUrl && Number.isFinite(wanted) && trips.some((t) => t.id === wanted)) return wanted;
-  return trips[0]?.id ?? null;
+  lastResolved = pickTripId(
+    fromUrl,
+    lastResolved,
+    trips.map((t) => t.id)
+  );
+  return lastResolved;
 }
