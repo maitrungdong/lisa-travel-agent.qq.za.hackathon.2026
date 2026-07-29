@@ -115,12 +115,18 @@ const TOOL_TIMEOUT_MS = 25_000;
  *
  * `user_location` để kết quả ra tiếng Việt và ưu tiên trang trong nước — hỏi
  * "khách sạn Nha Trang" mà trả về blog du lịch tiếng Anh thì gần như vô dụng.
+ *
+ * ⚠ KHÔNG đặt `country: "VN"` — API trả 400 "Country code VN is not supported"
+ * (đo thật 29/07, request req_011CdWf2p5wf3pwUaCPS5Svs; danh sách nước được hỗ
+ * trợ của web_search không có VN). Suốt thời gian có dòng đó, MỌI tin chat
+ * trong Mini App rơi về chế độ dự phòng không tìm web. Timezone là đủ để neo
+ * kết quả về Việt Nam, và truy vấn tiếng Việt tự nó đã kéo trang tiếng Việt.
  */
 const WEB_SEARCH_TOOL = {
   type: "web_search_20250305",
   name: "web_search",
   max_uses: 3,
-  user_location: { type: "approximate", country: "VN", timezone: "Asia/Ho_Chi_Minh" }
+  user_location: { type: "approximate", timezone: "Asia/Ho_Chi_Minh" }
 } as unknown as Anthropic.Tool;
 
 /**
