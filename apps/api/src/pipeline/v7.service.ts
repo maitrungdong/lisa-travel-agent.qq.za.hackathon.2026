@@ -11,6 +11,7 @@ import { V7ContextService } from "./v7.context";
 import { RUN_TTL_MS, TERMINAL_STATUSES, type RunStatus } from "./pipeline.types";
 import { applyStatePatch, type JsonObject } from "./state-patch";
 import {
+  brainSummaryText,
   MAX_CONSECUTIVE_FAILURES,
   parseAgentJson,
   SAFE_FALLBACK_MESSAGE,
@@ -285,6 +286,14 @@ export class V7Service {
       );
       await this.save(run.id, { thinState: state });
       this.log.log(`${tag} BRAIN → ${brain.status} · ${brain.response_kind ?? "?"}`);
+      // Thiếu evidence/quality không chặn luồng, nhưng phải ồn ào: đó là hai
+      // thứ duy nhất cho biết Brain có tra cứu thật hay đang bịa.
+      if (!Array.isArray(brain.evidence) || !brain.quality) {
+        this.log.warn(
+          `${tag} Brain thiếu evidence=${Array.isArray(brain.evidence) ? "có" : "KHÔNG"}` +
+            ` · quality=${brain.quality ? "có" : "KHÔNG"} — prompt cần siết theo §7`
+        );
+      }
 
       /* ---------- 4. Finalizer ---------- */
       await this.save(run.id, { status: "running_c", stage: "C" });
@@ -326,7 +335,8 @@ export class V7Service {
         conversationId: run.conversationId,
         zaloChatId: run.zaloChatId,
         thinState: state,
-        decisionSummary: brain.decision_summary ?? null
+        // `decision_summary` có thể là object (agent thật) chứ không phải chuỗi như §7
+        decisionSummary: brainSummaryText(brain.decision_summary)
       });
     } catch (err) {
       await this.handleFailure(run, tag, err);

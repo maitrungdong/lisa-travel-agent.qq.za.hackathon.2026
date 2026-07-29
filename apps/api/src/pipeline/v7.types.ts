@@ -68,19 +68,24 @@ export function looksLikeResearchTrigger(text: string): boolean {
   if (norm === RESEARCH_TRIGGER) return true;
 
   /**
-   * Đường lui cho chat nhóm.
+   * Đường lui cho chat nhóm: chấp nhận trigger đứng CUỐI câu.
    *
-   * Zalo chèn `"@Tên Bot "` vào đầu mọi tin gửi bot trong nhóm, và tên bot có
-   * dấu cách nên `stripBotMention` chỉ gỡ sạch được khi biết `ZALO_BOT_NAME`.
-   * Chưa cấu hình biến đó thì so sánh chính xác ở trên luôn trượt — tức là
-   * trigger duy nhất mở Brain không bao giờ bấm được, đúng trong môi trường
-   * sản phẩm này sinh ra để chạy.
+   * Zalo chèn `"@Tên Bot "` vào đầu mọi tin gửi bot trong nhóm. Tên bot có dấu
+   * cách nên `stripBotMention` chỉ gỡ trọn khi biết `ZALO_BOT_NAME`; chưa cấu
+   * hình thì còn sót `"ZINO - Trợ lý nhu cầu BẮT ĐẦU RESEARCH"` và so sánh
+   * chính xác ở trên trượt — tức là công tắc duy nhất mở Brain không bấm được.
    *
-   * Nới đúng một nấc: CHỈ khi tin bắt đầu bằng mention thì mới chấp nhận
-   * trigger đứng ở cuối. Không phải "chứa đâu đó" — `BẮT ĐẦU RESEARCH` phải là
-   * phần kết của câu, nên "đừng BẮT ĐẦU RESEARCH vội" vẫn bị từ chối.
+   * ⚠ Bản trước thêm điều kiện "tin phải bắt đầu bằng @" để giới hạn nới lỏng.
+   * Sai, và sai theo kiểu khó thấy: hàm này nhận text ĐÃ qua `stripBotMention`,
+   * nên dấu `@` luôn bị gỡ trước khi tới đây. Điều kiện đó không bao giờ đúng,
+   * và hai lớp phòng vệ triệt tiêu lẫn nhau. Đo thật 29/07: ba lượt user gõ
+   * đúng trigger mà log không hề đánh dấu.
+   *
+   * Chỉ khớp ở CUỐI, không phải "chứa đâu đó" — nên "đừng BẮT ĐẦU RESEARCH
+   * vội" vẫn bị từ chối. Nhận nhầm ở đây tốn một lượt Brain; bỏ sót thì cả
+   * tính năng chính không dùng được.
    */
-  return /^@/u.test(text.trim()) && norm.endsWith(RESEARCH_TRIGGER);
+  return norm.endsWith(RESEARCH_TRIGGER);
 }
 
 /* ==================================================================== */
@@ -128,11 +133,14 @@ export interface IntakeResult {
 export interface BrainResult {
   status: string;
   response_kind?: string;
-  decision_summary?: string;
+  /** §7 nói là chuỗi; agent thật trả object {rationale, key_caveats,…} */
+  decision_summary?: string | Record<string, unknown>;
   state_patch?: unknown;
-  draft_message_to_user: string;
-  evidence: unknown[];
-  quality: Record<string, unknown>;
+  /** Có thể vắng — agent thật đóng gói nội dung trong `answer_payload` */
+  draft_message_to_user?: string;
+  answer_payload?: Record<string, unknown>;
+  evidence?: unknown[];
+  quality?: Record<string, unknown>;
   [k: string]: unknown;
 }
 
@@ -224,18 +232,58 @@ export function validateIntake(o: Record<string, unknown>): IntakeResult {
   return o as unknown as IntakeResult;
 }
 
-/** §10.2 */
+/**
+ * §10.2, nhưng NỚI theo agent thật.
+ *
+ * ĐO THẬT 29/07 09:06: Brain chạy 155,4s, trả 12.556 ký tự JSON hợp lệ với
+ * `{status, response_kind, decision_summary: {...}, answer_payload: {...}}` —
+ * KHÔNG có `draft_message_to_user`, `evidence`, `quality`. Bản validate cũ đòi
+ * đủ ba field đó nên ném lỗi và vứt trọn 155 giây công việc, rồi gửi cho nhóm
+ * một câu xin lỗi.
+ *
+ * Sai lầm ở đây là siết chặt thứ backend KHÔNG ĐỌC. Cả khối `brain_result`
+ * được truyền nguyên vẹn sang Finalizer; Finalizer mới là bên soạn chữ. Nên
+ * điều kiện đúng chỉ có hai: có `status`, và có ít nhất một thứ để Finalizer
+ * làm việc. Thiếu `evidence`/`quality` thì ghi log — đó là tín hiệu prompt cần
+ * siết, không phải lý do vứt kết quả.
+ */
 export function validateBrain(o: Record<string, unknown>): BrainResult {
   const bad = (r: string) => {
     throw new V7ValidationError("BRAIN", r, o);
   };
-  if (typeof o.status !== "string") bad("thiếu `status`");
-  if (typeof o.draft_message_to_user !== "string" || !o.draft_message_to_user.trim()) {
-    bad("thiếu `draft_message_to_user`");
+  if (typeof o.status !== "string" || !o.status.trim()) bad("thiếu `status`");
+
+  const isObj = (v: unknown) => !!v && typeof v === "object";
+  const hasContent =
+    (typeof o.draft_message_to_user === "string" && o.draft_message_to_user.trim().length > 0) ||
+    isObj(o.answer_payload) ||
+    isObj(o.decision_summary) ||
+    (typeof o.decision_summary === "string" && o.decision_summary.trim().length > 0);
+
+  if (!hasContent) {
+    bad("không có draft_message_to_user, answer_payload hay decision_summary — Finalizer sẽ không có gì để soạn");
   }
-  if (!Array.isArray(o.evidence)) bad("thiếu `evidence`");
-  if (!o.quality || typeof o.quality !== "object") bad("thiếu `quality`");
   return o as unknown as BrainResult;
+}
+
+/**
+ * Rút một dòng tóm tắt người đọc được từ `decision_summary`.
+ *
+ * Cần vì §7 nói field này là chuỗi còn agent thật trả object — gọi thẳng
+ * `.trim()` lên nó là `TypeError`, và vì `persistTurn` bọc try/catch nên lỗi
+ * đó chỉ hiện thành một dòng warn rồi Mini App trống trơn mà không ai biết vì sao.
+ */
+export function brainSummaryText(v: unknown): string | null {
+  if (typeof v === "string") return v.trim() || null;
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const pick = o.rationale ?? o.summary ?? o.text;
+  if (typeof pick === "string" && pick.trim()) return pick.trim();
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return null;
+  }
 }
 
 /** §10.3 */

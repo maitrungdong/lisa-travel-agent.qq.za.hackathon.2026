@@ -451,8 +451,10 @@ Có 10 file test, tập trung vào logic thuần: `money/settle.test.ts` (392 d�
 
 ## 15. Câu hỏi mở
 
-1. `[UNKNOWN]` **Brain chạy mất bao lâu?** Chưa lần nào chạy trọn. `ZINO_BRAIN_TIMEOUT_MS = 300s` là con số đoán từ Offer Scout (87s). Cần một lần đo trước khi demo.
+1. ~~`[UNKNOWN]` Brain chạy mất bao lâu?~~ **ĐÃ ĐO 29/07 09:06** — `[FACT]` Brain **155,4s**, sinh 12.556 ký tự. Cả lượt Intake→Brain→Finalizer: **167,7s**. Lượt Intake đầu tiên của một session mới mất 39,0s (dựng sandbox), các lượt sau 11–14s. Kết luận: `ZINO_BRAIN_TIMEOUT_MS = 300s` có biên gần gấp đôi, giữ nguyên; `STALE_LOCK_MS = 15 phút` vẫn lớn hơn tổng 284s worst case, giữ nguyên.
 2. `[UNKNOWN]` **Brain trả `needs_user_input` thì hệ thống làm gì?** Code chạy thẳng sang Finalizer, không có nhánh riêng (`v7.service.ts:249`). Có phải hành vi mong muốn không?
+
+2b. `[FACT]` **Hợp đồng Brain trong doc KHÔNG khớp agent thật.** §7/§10.2 quy định `draft_message_to_user` + `evidence` + `quality`; agent team dựng trả `answer_payload` + `decision_summary` (là **object**, không phải chuỗi) và không có ba field kia. Bản validate cũ vì thế vứt trọn 155 giây công việc. Đã nới `validateBrain` xuống hai điều kiện thật sự cần (có `status`, có gì đó cho Finalizer) và ghi log cảnh báo khi thiếu `evidence`/`quality` — hai thứ duy nhất cho biết Brain có tra cứu thật hay đang bịa. **Việc còn lại cho team: quyết định sửa doc theo agent, hay sửa agent theo doc.**
 3. `[UNKNOWN]` **`current_brief.trip` mà Intake sinh ra có đúng hình dạng `upsertTrip` mong đợi không?** (`destinations[]` hoặc `destination`, `date_window.start/end` dạng `YYYY-MM-DD`, `budget.per_person`, `participant_count` — `v7.context.ts:213-221`). Sai tên field là Mini App trống trơn mà chỉ có một dòng `warn`.
 4. `[UNKNOWN]` **`reply_contract` được dùng ở đâu ngoài việc lưu?** Nó được ghi vào `thin_state.last_reply_contract` (`v7.service.ts:263`) để lượt sau Intake hiểu "chọn 2". Chưa xác minh Intake có thật sự đọc nó không — nằm trong prompt trên Console.
 5. `[UNKNOWN]` **`partner_network` Brain đọc được nhưng có đường thực thi nào không?** Không tìm thấy `send_inquiry` hay tương đương ở phía v7. Brain gợi ý được OA đối tác nhưng backend không có cách gửi lệnh đi.
