@@ -90,6 +90,9 @@ export class ZaloController {
       return;
     }
 
+    // Lệnh thăm dò $$… — chặn trước agent, không tốn lượt model
+    if (await this.tryDebugCommand(msg)) return;
+
     // Mã ghép đôi Mini App — chặn TRƯỚC khi vào agent.
     //
     // Đặt ở đây vì hai lý do: (1) không tốn một lượt model cho một chuỗi 6 số,
@@ -185,6 +188,63 @@ export class ZaloController {
       msg.chatId,
       BATCH_WINDOW_MS
     );
+  }
+
+  /**
+   * Lệnh thăm dò khả năng hiển thị của Zalo — chỉ dùng lúc phát triển.
+   *
+   * `$$send_link [url]` bắn 4 biến thể của CÙNG một link vào nhóm, để trả lời
+   * bằng mắt câu hỏi mà tài liệu Bot API không trả lời: Zalo có unfurl link
+   * thành card (ảnh + title + description) không, và ở dạng gửi nào?
+   *
+   *   1. Link trần một mình        → unfurl "sạch" nhất nếu Zalo có làm
+   *   2. Link nằm trong đoạn text  → thường là dạng Zino sẽ dùng thật
+   *   3. Markdown [chữ](link) qua parse_mode → link giấu dưới chữ có unfurl không?
+   *   4. sendPhoto + link trong caption     → thẻ tự dựng: ảnh mình chọn + link
+   *
+   * Nhìn kết quả trong nhóm rồi chọn template theo docs/ZALO-MESSAGE-TEMPLATES.md.
+   * Biến thể nào đẹp nhất thì đó là khuôn cho present_option.
+   *
+   * KHÔNG giới hạn người gọi: tiền tố `$$` đủ hiếm để không ai gõ nhầm, và
+   * lệnh không đọc/ghi gì ngoài việc gửi tin mẫu. Gỡ sau Demo Day.
+   */
+  private async tryDebugCommand(msg: {
+    chatId: string;
+    text?: string | null;
+  }): Promise<boolean> {
+    const text = stripBotMention((msg.text ?? "").trim());
+    if (!text.startsWith("$$send_link")) return false;
+
+    // Mặc định: OA Sheraton Nha Trang trong danh sách đối tác
+    const url = text.split(/\s+/)[1] ?? "https://zalo.me/3556873486474852721";
+    this.log.log(`$$send_link → bắn 4 biến thể của ${url}`);
+
+    await this.zalo.sendRaw(msg.chatId, "🧪 1/4 — link trần:");
+    await this.zalo.sendRaw(msg.chatId, url);
+
+    await this.zalo.sendRaw(
+      msg.chatId,
+      `🧪 2/4 — link trong đoạn text:\n\n🏨 Sheraton Nha Trang\n2.850.000đ/đêm · mặt biển Trần Phú\n\n💬 Nhắn OA: ${url}`
+    );
+
+    // parse_mode markdown — nếu Zalo render, link nằm gọn dưới chữ
+    await this.zalo.sendRich(
+      msg.chatId,
+      `🧪 3/4 — markdown link:\n\n**Sheraton Nha Trang** · 2.850.000đ/đêm\n\n[💬 Nhắn trực tiếp OA](${url})`
+    );
+
+    // Ảnh Unsplash ổn định, không chặn hotlink — đủ cho mục đích thăm dò
+    await this.zalo.sendPhoto(
+      msg.chatId,
+      "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=1080&q=80",
+      `🧪 4/4 — ảnh + caption\n\n🏨 Sheraton Nha Trang\n2.850.000đ/đêm · mặt biển Trần Phú\n• Hồ bơi vô cực tầng 6\n• Buffet sáng + đón sân bay\n\n💬 ${url}`
+    );
+
+    await this.zalo.sendRaw(
+      msg.chatId,
+      "🧪 Xong. Biến thể nào hiện đẹp nhất (có preview ảnh/title?) thì chụp lại — đó sẽ là khuôn thẻ của Zino."
+    );
+    return true;
   }
 
   /**
