@@ -128,10 +128,38 @@ describe("validateIntake — CỔNG chặn Brain chạy oan (§6.9)", () => {
 });
 
 describe("validateBrain / validateFinalizer — §10.2, §10.3", () => {
-  it("Brain thiếu evidence thì chặn", () => {
-    expect(() =>
-      validateBrain({ status: "ready_for_finalizer", draft_message_to_user: "x", quality: {} })
-    ).toThrow(V7ValidationError);
+  /**
+   * Test này TỪNG kỳ vọng "thiếu evidence thì chặn". Commit 5a2f531 cố ý nới
+   * `validateBrain` sau khi đo thật: Brain chạy 155s, trả JSON hợp lệ nhưng
+   * không có `evidence`/`quality` — bản cũ ném lỗi và vứt trọn 155 giây công
+   * việc vì thiếu field mà backend KHÔNG ĐỌC (cả khối được chuyển thẳng sang
+   * Finalizer). Test không được cập nhật theo nên đỏ từ đó.
+   *
+   * Giữ lại kỳ vọng cũ là bắt code quay về hành vi đã bị bác bỏ có lý do, nên
+   * ở đây ghi lại đúng giao kèo hiện hành.
+   */
+  it("thiếu evidence/quality thì VẪN cho qua — backend không đọc hai field này", () => {
+    const b = validateBrain({
+      status: "ready_for_finalizer",
+      draft_message_to_user: "x",
+      quality: {}
+    });
+    expect(b.status).toBe("ready_for_finalizer");
+  });
+
+  it("thiếu status thì chặn", () => {
+    expect(() => validateBrain({ draft_message_to_user: "x" })).toThrow(V7ValidationError);
+  });
+
+  it("KHÔNG có gì cho Finalizer soạn thì chặn", () => {
+    expect(() => validateBrain({ status: "ready_for_finalizer", quality: {} })).toThrow(
+      V7ValidationError
+    );
+  });
+
+  it("chỉ có answer_payload cũng đủ — không bắt buộc phải là draft_message_to_user", () => {
+    const b = validateBrain({ status: "ready_for_finalizer", answer_payload: { a: 1 } });
+    expect(b.status).toBe("ready_for_finalizer");
   });
 
   it("Brain đủ field thì qua", () => {
