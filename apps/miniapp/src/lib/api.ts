@@ -265,7 +265,14 @@ export interface ChatListing {
   priceHint?: string | null;
   imageUrl?: string | null;
   tags?: string | null;
+  /** Trang đã lấy thông tin — phải hiện lên thẻ, không được giấu */
+  sourceUrl?: string | null;
   proposal: unknown;
+}
+
+export interface ChatCitation {
+  url: string;
+  title: string;
 }
 
 export interface ChatCard {
@@ -284,6 +291,8 @@ export interface ChatReply {
   source: "deterministic" | "llm";
   /** Tool nào đã chạy — hiện lên UI để biết số liệu lấy từ đâu */
   usedTools?: string[];
+  /** Trang web Zino đã đọc. Bắt buộc hiện khi có. */
+  citations?: ChatCitation[];
   /** Có = câu của model bị chặn vì số không khớp dữ liệu */
   gateBlocked?: string;
   /** Có = agent không chạy được, câu này do code tính */

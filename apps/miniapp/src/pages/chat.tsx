@@ -5,11 +5,12 @@ import {
   api,
   type ChatAction,
   type ChatCard,
+  type ChatCitation,
   type ChatListing,
   type ChatReply
 } from "../lib/api";
 import { currentActor } from "../lib/actor";
-import { scanQr } from "../lib/zalo";
+import { openExternal, scanQr } from "../lib/zalo";
 import { parsePaymentQr, suggestTitle } from "../lib/qr";
 import { useRecap } from "../lib/use-trip";
 import { Card, CardContent } from "../components/ui/card";
@@ -26,6 +27,8 @@ interface Turn {
   gateBlocked?: string;
   /** Có = agent không chạy được (lỗi model/mạng), câu này do code tính */
   degraded?: string;
+  /** Trang web Zino đã đọc để trả lời câu này */
+  citations?: ChatCitation[];
 }
 
 /** Trạng thái của một nút "xác nhận", theo token. */
@@ -125,6 +128,7 @@ export default function ChatPage() {
           cards,
           source: r.source,
           usedTools: r.usedTools,
+          citations: r.citations,
           gateBlocked: r.gateBlocked,
           degraded: r.degraded
         }
@@ -327,6 +331,27 @@ export default function ChatPage() {
                     {t.text}
                   </p>
                   {/* Nói rõ số liệu từ đâu — giám khảo hỏi "sao tin được" là chỉ vào đây */}
+                  {/* Nguồn web — hiện ngay dưới câu trả lời, mở được.
+                      Vừa là yêu cầu của Anthropic khi đưa kết quả tìm kiếm tới
+                      người dùng cuối, vừa là cách duy nhất người đọc phân biệt
+                      "Zino đọc được" với "Zino nhớ mang máng". */}
+                  {t.citations && t.citations.length > 0 && (
+                    <div className="space-y-0.5 px-1 pt-0.5">
+                      <p className="text-[10px] text-muted-foreground">
+                        Zino đọc từ (thông tin trên web, có thể đã cũ):
+                      </p>
+                      {t.citations.slice(0, 4).map((c) => (
+                        <button
+                          key={c.url}
+                          type="button"
+                          onClick={() => void openExternal(c.url)}
+                          className="block max-w-full truncate text-left text-[11px] text-primary underline"
+                        >
+                          {domainOf(c.url)} — {c.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {(t.usedTools?.length || t.gateBlocked || t.degraded) && (
                     <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
                       {t.usedTools?.length ? `đã tra: ${t.usedTools.join(", ")}` : null}
@@ -427,6 +452,12 @@ const TILE_COLORS = [
   "bg-violet-100 text-violet-700"
 ];
 
+/** Tên miền gọn để hiện làm nguồn. URL hỏng thì trả về chính nó, đừng ẩn đi. */
+function domainOf(url: string): string {
+  const m = /^https?:\/\/([^/?#]+)/i.exec(url);
+  return m ? m[1].replace(/^www\./i, "") : url;
+}
+
 function tileClass(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -480,6 +511,14 @@ function ListingGrid({
               {l.detail && (
                 <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                   {l.detail}
+                </p>
+              )}
+              {/* Nguồn phải hiện ngay trên thẻ, không giấu sau một cú bấm.
+                  Người dùng cần biết con số này Zino đọc ở đâu ra TRƯỚC khi
+                  chọn, không phải sau. */}
+              {l.sourceUrl && (
+                <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                  nguồn: {domainOf(l.sourceUrl)}
                 </p>
               )}
               <div className="mt-1.5 flex items-center gap-2">

@@ -5,7 +5,9 @@ import {
   normalizeExpense,
   normalizeNote,
   normalizeStay,
+  normalizeStayOptions,
   revalidate,
+  sourceDomain,
   type ProposalContext
 } from "./proposals";
 
@@ -193,6 +195,88 @@ describe("normalizeStay", () => {
 
   it("thiếu tên thì từ chối", () => {
     expect(normalizeStay({}, ctx)).toMatchObject({ ok: false });
+  });
+});
+
+/**
+ * Đây là hàng rào giữa "Zino đọc được trên web" và "Zino nhớ mang máng".
+ *
+ * Model tìm web xong rất dễ trộn hai loại đó vào nhau, và trong câu trả lời
+ * chúng trông y hệt nhau. Bắt buộc dẫn nguồn là cách rẻ nhất để tách ra: cái
+ * nào không chỉ được trang đã đọc thì không lên thẻ, dù nghe hợp lý tới đâu.
+ */
+describe("normalizeStayOptions — không có nguồn thì không lên thẻ", () => {
+  it("loại đúng phương án thiếu sourceUrl, giữ phương án có nguồn", () => {
+    const r = normalizeStayOptions(
+      {
+        options: [
+          { title: "Có nguồn", sourceUrl: "https://booking.com/x" },
+          { title: "Model tự nhớ", priceHint: "1tr/đêm" }
+        ]
+      },
+      ctx
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.values).toHaveLength(1);
+    expect(r.dropped[0]).toContain("Model tự nhớ");
+    expect(r.dropped[0]).toContain("sourceUrl");
+  });
+
+  it("sourceUrl không phải http(s) cũng bị loại", () => {
+    const r = normalizeStayOptions(
+      {
+        options: [
+          { title: "A", sourceUrl: "javascript:alert(1)" },
+          { title: "B", sourceUrl: "chỗ nào đó" },
+          { title: "C", sourceUrl: "https://ok.vn/a" }
+        ]
+      },
+      ctx
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.values.map((v) => (v.kind === "stay" ? v.title : ""))).toEqual(["C"]);
+  });
+
+  it("không phương án nào có nguồn thì từ chối cả lượt, nói rõ vì sao", () => {
+    const r = normalizeStayOptions({ options: [{ title: "A" }, { title: "B" }] }, ctx);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toContain("sourceUrl");
+  });
+
+  it("rỗng hoặc quá 8 phương án đều bị chặn", () => {
+    expect(normalizeStayOptions({ options: [] }, ctx)).toMatchObject({ ok: false });
+    expect(
+      normalizeStayOptions(
+        { options: Array(9).fill({ title: "X", sourceUrl: "https://a.vn" }) },
+        ctx
+      )
+    ).toMatchObject({ ok: false });
+  });
+
+  it("giữ nguyên khoảng giá dạng chữ và link nguồn", () => {
+    const r = normalizeStayOptions(
+      {
+        options: [
+          { title: "Homestay", priceHint: "900k–1,2tr/đêm", sourceUrl: "https://www.booking.com/x?a=1" }
+        ]
+      },
+      ctx
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.values[0].kind !== "stay") return;
+    expect(r.values[0].priceHint).toBe("900k–1,2tr/đêm");
+    expect(r.values[0].sourceUrl).toBe("https://www.booking.com/x?a=1");
+  });
+});
+
+describe("sourceDomain", () => {
+  it("bỏ www và phần đường dẫn — thẻ chỉ cần tên miền", () => {
+    expect(sourceDomain("https://www.booking.com/hotel/vn/x.html")).toBe("booking.com");
+    expect(sourceDomain("https://agoda.com/a?b=1")).toBe("agoda.com");
+    expect(sourceDomain(null)).toBe(null);
   });
 });
 

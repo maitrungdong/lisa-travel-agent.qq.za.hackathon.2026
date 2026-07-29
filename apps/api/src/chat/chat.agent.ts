@@ -4,6 +4,7 @@ import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
 import { DecisionsService } from "../decisions/decisions.service";
 import { TripsService } from "../trips/trips.service";
 import { envStr } from "../pipeline/pipeline.types";
+import { collectCitations } from "./citations";
 import { gateReply } from "./grounding";
 import {
   describeProposal,
@@ -11,6 +12,7 @@ import {
   normalizeEvent,
   normalizeExpense,
   normalizeNote,
+  normalizeStayOptions,
   type Proposal,
   type ProposalContext
 } from "./proposals";
@@ -62,6 +64,8 @@ export interface AgentListing {
   priceHint?: string | null;
   imageUrl?: string | null;
   tags?: string | null;
+  /** Trang đã lấy thông tin. Bắt buộc hiện lên thẻ khi phương án đến từ web. */
+  sourceUrl?: string | null;
   proposal: Proposal;
 }
 
@@ -74,9 +78,17 @@ export interface AgentCard {
   listings?: AgentListing[];
 }
 
+/** Một trang web Zino đã đọc trong lượt này. */
+export interface AgentCitation {
+  url: string;
+  title: string;
+}
+
 export interface AgentReply {
   text: string;
   cards: AgentCard[];
+  /** Nguồn web đã dùng. Rỗng = câu trả lời hoàn toàn từ dữ liệu chuyến đi. */
+  citations?: AgentCitation[];
   /** llm = model viết và qua được cổng · deterministic = model bị chặn hoặc lỗi */
   source: "llm" | "deterministic";
   /** Tool nào đã được gọi — hiện lên UI để người dùng biết số liệu từ đâu */
@@ -96,6 +108,30 @@ export interface AgentReply {
 const MAX_ROUNDS = 4;
 const TOOL_TIMEOUT_MS = 25_000;
 
+/**
+ * Web search là SERVER TOOL — chạy trên hạ tầng Anthropic, VPS không phải mở
+ * thêm cổng nào. Nhưng nó đắt cả tiền lẫn thời gian, mà đây là khung chat đồng
+ * bộ có người ngồi chờ. Nên chặn cứng số lần tìm thay vì tin vào prompt.
+ *
+ * `user_location` để kết quả ra tiếng Việt và ưu tiên trang trong nước — hỏi
+ * "khách sạn Nha Trang" mà trả về blog du lịch tiếng Anh thì gần như vô dụng.
+ */
+const WEB_SEARCH_TOOL = {
+  type: "web_search_20250305",
+  name: "web_search",
+  max_uses: 3,
+  user_location: { type: "approximate", country: "VN", timezone: "Asia/Ho_Chi_Minh" }
+} as unknown as Anthropic.Tool;
+
+/**
+ * Riêng lượt có tìm web thì nới hạn chờ.
+ *
+ * Một lần tìm mất vài giây, ba lần cộng lại vượt xa 25s của lượt thường. Cắt
+ * đúng lúc model vừa tìm xong thì mất trắng cả tiền tìm lẫn thời gian chờ.
+ * Vẫn dưới `read 120s` của nginx nên nginx không bao giờ là bên cắt trước.
+ */
+const WEB_TIMEOUT_MS = 90_000;
+
 const SYSTEM = `Bạn là Zino, trợ lý của một nhóm bạn đi du lịch, đang trả lời TRONG Mini App.
 
 QUY TẮC BẮT BUỘC:
@@ -107,6 +143,15 @@ QUY TẮC BẮT BUỘC:
   hiện thẻ chi tiết bên dưới câu trả lời của bạn rồi.
 - Việc cần tìm kiếm thật (tìm quán, hỏi đối tác, đặt chỗ) thì nói người dùng
   nhắn trong nhóm Zalo — ở đó bạn mới có công cụ research.
+
+KHI NGƯỜI DÙNG HỎI CHỖ Ở / QUÁN / CHỖ CHƠI:
+1. Gọi search_stays trước — đó là danh bạ đối tác, mở chat trực tiếp được.
+2. Danh bạ không có gì hợp thì DÙNG web_search để tìm thật.
+3. Tìm xong gọi propose_stay_options, mỗi phương án kèm sourceUrl là trang bạn
+   VỪA ĐỌC. Không nhớ nguồn thì bỏ phương án đó đi, đừng đoán URL.
+4. TUYỆT ĐỐI không trộn chỗ bạn "nhớ" với chỗ vừa đọc được. Không tìm thấy thì
+   nói thẳng là chưa tìm được, đừng lấp chỗ trống bằng trí nhớ.
+5. Giá lấy từ web là giá THAM KHẢO, có thể đã cũ — nói rõ điều đó một lần.
 
 KHI NGƯỜI DÙNG NHỜ LÀM VIỆC (ghi khoản chi, lưu ghi chú, thêm mục lịch trình):
 - Gọi tool propose_* tương ứng. Tool KHÔNG ghi gì cả, nó chỉ dựng thẻ xác nhận;
@@ -144,6 +189,33 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { date: { type: "string", description: "yyyy-mm-dd, giờ VN" } },
       required: []
+    }
+  },
+  {
+    name: "propose_stay_options",
+    description:
+      "Sau khi đã TÌM WEB, đưa danh sách chỗ ở tìm được để app hiện thành lưới thẻ có nút Chọn. MỖI phương án BẮT BUỘC kèm `sourceUrl` là trang bạn thật sự đọc được thông tin đó. Phương án nào không chỉ ra được nguồn thì đừng đưa vào — thà ít mà chắc. KHÔNG dùng tool này nếu chưa tìm web.",
+    input_schema: {
+      type: "object",
+      properties: {
+        options: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Tên chỗ ở" },
+              priceHint: { type: "string", description: "Khoảng giá dạng chữ, vd '900k–1,2tr/đêm'" },
+              location: { type: "string", description: "Khu vực / địa chỉ ngắn" },
+              note: { type: "string", description: "Một câu vì sao hợp với nhóm này" },
+              sourceUrl: { type: "string", description: "BẮT BUỘC — trang đã đọc được thông tin" },
+              imageUrl: { type: "string", description: "Ảnh nếu có, phải là http(s)" }
+            },
+            required: ["title", "sourceUrl"]
+          }
+        }
+      },
+      required: ["options"]
     }
   },
   {
@@ -236,6 +308,10 @@ export class ChatAgent {
     let stays: AgentListing[] = [];
     /** Nạp một lần, dùng cho mọi tool propose_* trong lượt */
     let ctx: ProposalContext | null = null;
+    /** Trang web đã đọc trong lượt này — hiện dưới câu trả lời */
+    const citations: AgentCitation[] = [];
+    /** Đã tìm web chưa — quyết định hạn chờ cho các vòng sau */
+    let searched = false;
 
     const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
 
@@ -243,19 +319,40 @@ export class ChatAgent {
       for (let round = 0; round < MAX_ROUNDS; round++) {
         const res = await this.anthropic.messages.create(
           {
+            tools: [...TOOLS, WEB_SEARCH_TOOL],
             // envStr chứ KHÔNG phải `??`: compose đặt ZINO_CHAT_MODEL: ${ZINO_CHAT_MODEL:-}
             // nên biến TỒN TẠI với giá trị rỗng. `??` không bắt được chuỗi rỗng →
             // tên model là "" → Anthropic trả 400 → agent ném lỗi → MỌI câu hỏi
             // đều rơi về câu tất định trong im lặng. Repo đã dính đúng bẫy này
             // một lần với nhóm biến ZINO_* (xem pipeline.types.ts).
             model: envStr("ZINO_CHAT_MODEL", "claude-haiku-4-5-20251001"),
-            max_tokens: 700,
+            max_tokens: 1500,
             system: SYSTEM,
-            tools: TOOLS,
             messages
           },
-          { timeout: TOOL_TIMEOUT_MS }
+          { timeout: searched ? WEB_TIMEOUT_MS : TOOL_TIMEOUT_MS }
         );
+
+        // Nguồn web đã dùng — phải hiện lên cho người đọc, vừa là yêu cầu của
+        // Anthropic khi đưa kết quả tìm kiếm tới người dùng cuối, vừa là cách
+        // duy nhất người ta kiểm được Zino đọc ở đâu ra.
+        for (const c of collectCitations(res.content)) {
+          if (!citations.some((x) => x.url === c.url)) citations.push(c);
+        }
+        if (res.content.some((b) => b.type === "server_tool_use")) {
+          searched = true;
+          if (!usedTools.includes("web_search")) usedTools.push("web_search");
+        }
+
+        /**
+         * Lượt tìm web dài có thể bị API tạm dừng giữa chừng. Cách tiếp tục duy
+         * nhất là gửi lại NGUYÊN VẸN khối assistant vừa nhận — sửa một ký tự
+         * trong `encrypted_content` là request sau trả 400.
+         */
+        if (res.stop_reason === "pause_turn") {
+          messages.push({ role: "assistant", content: res.content });
+          continue;
+        }
 
         const toolUses = res.content.filter(
           (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
@@ -286,6 +383,7 @@ export class ChatAgent {
             ],
             source: gate.passed ? "llm" : "deterministic",
             usedTools,
+            citations,
             gateBlocked: gate.passed ? undefined : gate.reason
           };
         }
@@ -312,6 +410,21 @@ export class ChatAgent {
           const proposed = (out as { proposal?: Proposal }).proposal;
           if (proposed) proposals.push(proposed);
           if (use.name === "search_stays") stays = (out as { listings: AgentListing[] }).listings;
+          if (use.name === "propose_stay_options") {
+            const r = normalizeStayOptions(use.input as Record<string, unknown>, ctx!);
+            // Thẻ dựng lại từ đề xuất ĐÃ CHUẨN HOÁ, không phải từ input thô của
+            // model — cái gì bị loại vì thiếu nguồn thì cũng không lên thẻ.
+            if (r.ok) {
+              stays = r.values.map((p) => ({
+                title: p.kind === "stay" ? p.title : "",
+                detail: p.kind === "stay" ? p.note : null,
+                priceHint: p.kind === "stay" ? p.priceHint : null,
+                imageUrl: p.kind === "stay" ? p.imageUrl : null,
+                sourceUrl: p.kind === "stay" ? p.sourceUrl : null,
+                proposal: p
+              }));
+            }
+          }
           collected[use.name] = out;
           if (!usedTools.includes(use.name)) usedTools.push(use.name);
           results.push({
@@ -329,7 +442,8 @@ export class ChatAgent {
         text: this.fallbackText(issues, collected),
         cards: [...this.proposalCards(proposals, ctx), ...this.buildCards(issues, unpaidCount)],
         source: "deterministic",
-        usedTools
+        usedTools,
+        citations
       };
     } catch (err) {
       // Model lỗi/timeout thì vẫn phải trả lời được — dữ liệu đã có trong tay
@@ -368,6 +482,19 @@ export class ChatAgent {
       // sau khi người dùng bấm — và ở đó lại kiểm một lần nữa.
       case "search_stays":
         return this.searchStays(tripId, ctx!, typeof input.keyword === "string" ? input.keyword : undefined);
+
+      case "propose_stay_options": {
+        const r = normalizeStayOptions(input, ctx!);
+        if (!r.ok) return { ok: false, error: r.reason };
+        return {
+          ok: true,
+          accepted: r.values.length,
+          // Nói thẳng cái gì bị loại và vì sao. Im lặng cắt bớt thì model tưởng
+          // đã đưa đủ và sẽ mô tả trong câu trả lời những chỗ không lên thẻ.
+          dropped: r.dropped,
+          note: "App đã hiện lưới thẻ. Đừng liệt kê lại từng chỗ trong câu trả lời."
+        };
+      }
 
       case "propose_expense":
         return this.proposeResult(normalizeExpense(input, ctx!), ctx!);
@@ -443,7 +570,9 @@ export class ChatAgent {
           priceHint: r.priceHint,
           partnerOaId: r.oaId,
           imageUrl: r.avatarUrl,
-          note: r.description
+          note: r.description,
+          // Đối tác trong danh bạ thì nguồn là chính OA đó, không phải trang web.
+          sourceUrl: r.deeplink
         } satisfies Proposal
       }))
     };
@@ -714,3 +843,4 @@ export class ChatAgent {
 function vnd(n: number): string {
   return `${Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}đ`;
 }
+

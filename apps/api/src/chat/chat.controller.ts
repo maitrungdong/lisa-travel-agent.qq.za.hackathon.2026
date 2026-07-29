@@ -87,7 +87,15 @@ export interface ChatListing {
   priceHint?: string | null;
   imageUrl?: string | null;
   tags?: string | null;
+  /** Trang đã lấy thông tin — bắt buộc hiện khi phương án đến từ web */
+  sourceUrl?: string | null;
   proposal: Proposal;
+}
+
+/** Trang web Zino đã đọc để trả lời. */
+export interface ChatCitation {
+  url: string;
+  title: string;
 }
 
 export interface ChatCard {
@@ -102,6 +110,15 @@ export interface ChatCard {
 export interface ChatReply {
   text: string;
   cards: ChatCard[];
+  /**
+   * Nguồn web đã dùng.
+   *
+   * Không phải trang trí: tài liệu Anthropic yêu cầu hiện trích dẫn về nguồn
+   * gốc khi đưa kết quả tìm kiếm tới người dùng cuối. Với sản phẩm này còn có
+   * lý do thứ hai — đây là cách duy nhất người dùng phân biệt "Zino đọc được"
+   * với "Zino nhớ mang máng".
+   */
+  citations?: ChatCitation[];
   /** deterministic = tính bằng code · llm = model viết và qua được cổng kiểm chứng */
   source: "deterministic" | "llm";
   /** Tool nào đã chạy — hiện lên UI để người dùng biết số liệu lấy từ đâu */
@@ -390,6 +407,7 @@ export class ChatController {
         cards: r.cards,
         source: r.source,
         usedTools: r.usedTools,
+        citations: r.citations,
         gateBlocked: r.gateBlocked,
         degraded: r.degraded
       };

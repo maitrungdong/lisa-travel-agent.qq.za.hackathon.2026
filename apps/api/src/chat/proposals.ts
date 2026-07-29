@@ -64,6 +64,15 @@ export type Proposal =
       partnerOaId: string | null;
       imageUrl: string | null;
       note: string | null;
+      /**
+       * Trang đã lấy thông tin này. BẮT BUỘC với chỗ ở tìm từ web.
+       *
+       * Không có nguồn thì không phân biệt được "Zino đọc được ở đâu đó" với
+       * "Zino nghĩ ra" — mà hai thứ đó dẫn tới hai hành vi rất khác nhau của
+       * người dùng. Tài liệu Anthropic cũng yêu cầu hiện trích dẫn khi đưa kết
+       * quả tìm kiếm tới người dùng cuối.
+       */
+      sourceUrl: string | null;
     }
   | {
       kind: "event";
@@ -264,9 +273,70 @@ export function normalizeStay(raw: Record<string, unknown>, ctx: ProposalContext
       priceHint: str(raw.priceHint) || null,
       partnerOaId: str(raw.partnerOaId) || null,
       imageUrl: safeImageUrl(str(raw.imageUrl)),
-      note: str(raw.note) || null
+      note: str(raw.note) || null,
+      sourceUrl: safeHttpUrl(str(raw.sourceUrl))
     }
   };
+}
+
+/**
+ * Chuẩn hoá danh sách chỗ ở model tìm được trên web.
+ *
+ * Luật cứng: PHẢI có `sourceUrl` hợp lệ, không có thì loại thẳng phương án đó.
+ * Model tìm web xong rất dễ trộn lẫn thứ nó đọc được với thứ nó nhớ sẵn, và hai
+ * loại đó trông y hệt nhau trong câu trả lời. Bắt buộc dẫn nguồn là cách rẻ nhất
+ * để tách chúng ra — cái nào không chỉ được nguồn thì không lên thẻ.
+ *
+ * Trả về cả `dropped` để nói thẳng cho model biết nó vừa bị loại mấy cái và vì
+ * sao, thay vì im lặng cắt bớt rồi model tưởng mình đã đưa đủ.
+ */
+export function normalizeStayOptions(
+  raw: Record<string, unknown>,
+  ctx: ProposalContext
+): { ok: true; values: Proposal[]; dropped: string[] } | { ok: false; reason: string } {
+  const list = Array.isArray(raw.options) ? raw.options : null;
+  if (!list || list.length === 0) return { ok: false, reason: "Thiếu danh sách `options`." };
+  if (list.length > 8) return { ok: false, reason: "Nhiều quá — tối đa 8 phương án một lần." };
+
+  const values: Proposal[] = [];
+  const dropped: string[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") {
+      dropped.push("một mục không đúng định dạng");
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    if (!safeHttpUrl(str(o.sourceUrl))) {
+      dropped.push(`"${str(o.title) || "không tên"}" — thiếu sourceUrl hợp lệ`);
+      continue;
+    }
+    const r = normalizeStay(o, ctx);
+    if (!r.ok) {
+      dropped.push(`"${str(o.title) || "không tên"}" — ${r.reason}`);
+      continue;
+    }
+    values.push(r.value);
+  }
+
+  if (values.length === 0) {
+    return {
+      ok: false,
+      reason: `Không phương án nào dùng được: ${dropped.join("; ")}. Mỗi phương án phải kèm sourceUrl là trang bạn đã đọc.`
+    };
+  }
+  return { ok: true, values, dropped };
+}
+
+/** Link nguồn: chỉ http(s), không khoảng trắng, không ký tự phá thuộc tính HTML. */
+function safeHttpUrl(s: string): string | null {
+  return /^https?:\/\/[^\s'"<>]+$/i.test(s) ? s : null;
+}
+
+/** Tên miền để hiện trên thẻ — người đọc cần biết nguồn mà không phải mở link. */
+export function sourceDomain(url: string | null): string | null {
+  if (!url) return null;
+  const m = /^https?:\/\/([^/?#]+)/i.exec(url);
+  return m ? m[1].replace(/^www\./i, "") : null;
 }
 
 /**
@@ -377,9 +447,13 @@ export function describeProposal(
     case "stay": {
       const d = new Date(new Date(p.startsAt).getTime() + ICT_OFFSET_MS);
       const ddmm = `${d.toISOString().slice(8, 10)}/${d.toISOString().slice(5, 7)}`;
+      const src = sourceDomain(p.sourceUrl);
       return {
         title: `Chốt chỗ ở: ${p.title}`,
-        detail: `Nhận phòng ${ddmm}` + (p.location ? ` · ${p.location}` : ""),
+        detail:
+          `Nhận phòng ${ddmm}` +
+          (p.location ? ` · ${p.location}` : "") +
+          (src ? ` · nguồn ${src}` : ""),
         confirmLabel: "Chọn"
       };
     }
