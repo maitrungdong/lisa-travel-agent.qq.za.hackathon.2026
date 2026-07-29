@@ -1,21 +1,27 @@
 import { NavLink } from "react-router-dom";
-import { Bot, CalendarDays, Home, Images, Wallet } from "lucide-react";
+import { Bot, CalendarDays, Home, Luggage, Wallet } from "lucide-react";
 import { useTripSearch } from "../lib/active-trip";
 import { cn } from "../lib/utils";
 
 /**
- * Bốn tab, đúng theo wireframe: Tổng quan · Lịch trình · Chi phí · Kỷ niệm.
+ * Năm tab: Tổng quan · Lịch trình · Hỏi Zino · Chi phí · Đặt chỗ.
  *
- * "Đối tác" đã bỏ khỏi thanh dưới. Nó không phải một nơi người dùng muốn tới —
- * nó là bước giữa của việc "nhờ Zino hỏi chỗ này". Để nó ngang hàng với Chi phí
- * là nói sai về tần suất dùng. Route /partners vẫn còn, vào từ Trang chủ.
+ * Nguyên tắc chọn: thanh dưới dành cho nơi có VIỆC CẦN LÀM, không phải nơi để
+ * ngắm.
+ *
+ *  • "Đối tác" bỏ từ trước — nó là bước giữa của việc "nhờ Zino hỏi chỗ này",
+ *    không phải đích đến. Route /partners vẫn còn, vào từ Trang chủ.
+ *  • "Kỷ niệm" nhường chỗ cho "Đặt chỗ". Ảnh là thứ xem lại sau chuyến, và
+ *    trang tổng kết đã trình bày đầy đủ hơn hẳn; còn đặt chỗ là việc tồn đọng
+ *    có hạn chót. Một ô ở thanh dưới đáng giá hơn khi nó nhắc được việc.
+ *    Route /gallery vẫn còn, vào từ lưới lối tắt ở Trang chủ.
  */
 const tabs = [
   { to: "/", label: "Tổng quan", icon: Home },
   { to: "/itinerary", label: "Lịch trình", icon: CalendarDays },
   { to: "/chat", label: "Hỏi Zino", icon: Bot },
   { to: "/expenses", label: "Chi phí", icon: Wallet },
-  { to: "/gallery", label: "Kỷ niệm", icon: Images }
+  { to: "/bookings", label: "Đặt chỗ", icon: Luggage }
 ];
 
 export function BottomNav() {

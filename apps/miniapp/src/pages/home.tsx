@@ -7,10 +7,11 @@ import {
   Link2,
   Luggage,
   Sparkles,
+  Store,
   Wallet
 } from "lucide-react";
 import { useTripSearch } from "../lib/active-trip";
-import { api, recapPageUrl, type Activity, type BookingSummary, type Decision } from "../lib/api";
+import { api, recapPageUrl, type Activity, type Decision } from "../lib/api";
 import { DecisionCard } from "../components/decision-card";
 import { AUTH_ENABLED, DEBUG_UI } from "../lib/flags";
 import { session, type MeResponse } from "../lib/session";
@@ -41,7 +42,6 @@ export default function HomePage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [bookings, setBookings] = useState<BookingSummary | null>(null);
 
   useEffect(() => {
     void fetchZaloUser().then(setUser);
@@ -75,22 +75,6 @@ export default function HomePage() {
       .activeDecision(data.trip.id)
       .then((r) => {
         if (!cancelled) setDecision(r.decision);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [data]);
-
-  // Số việc đặt chỗ còn tồn. Chỉ là con số phụ trên một ô lối tắt nên hỏng thì
-  // ô đó hiện "—", không đáng để làm hỏng cả Trang chủ.
-  useEffect(() => {
-    if (!data) return;
-    let cancelled = false;
-    api
-      .bookingSummary(data.trip.id)
-      .then((s) => {
-        if (!cancelled) setBookings(s);
       })
       .catch(() => undefined);
     return () => {
@@ -287,16 +271,11 @@ export default function HomePage() {
             label: "Chi phí",
             sub: txCount ? `${txCount} giao dịch` : formatVnd(stats.perPerson)
           },
+          // Kỷ niệm và Đối tác đều KHÔNG có ở thanh tab dưới — lưới này là lối
+          // vào duy nhất của chúng. Đặt chỗ thì ngược lại, đã lên thanh tab nên
+          // không lặp lại ở đây.
           { to: "/gallery", icon: Images, label: "Kỷ niệm", sub: `${stats.photoCount} ảnh` },
-          // Đặt chỗ thay chỗ của Đối tác ở lưới này: nó có việc CẦN LÀM, còn
-          // Đối tác chỉ để tra cứu. Ô nào có việc tồn đọng thì ô đó xứng đáng
-          // đứng ở màn đầu tiên người ta mở.
-          {
-            to: "/bookings",
-            icon: Luggage,
-            label: "Đặt chỗ",
-            sub: bookings ? (bookings.todo > 0 ? `${bookings.todo} việc cần làm` : "xong hết") : "—"
-          }
+          { to: "/partners", icon: Store, label: "Đối tác", sub: trip.destination }
         ].map(({ to, icon: Icon, label, sub }) => (
           <Link
             key={to}
