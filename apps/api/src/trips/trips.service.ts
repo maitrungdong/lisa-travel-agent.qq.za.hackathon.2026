@@ -214,7 +214,11 @@ export class TripsService {
     const data = await this.recap(tripId);
     const base = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
     return renderRecapHtml(data, {
-      publicUrl: base ? `${base}/trip/${tripId}/` : null
+      // og:url phải trỏ vào URL MỞ ĐƯỢC. Bản cũ trỏ `/trip/:id/` — file tĩnh chỉ
+      // tồn tại sau khi job recap chạy xong, mà chuyến seed thẳng vào DB thì
+      // không bao giờ có. Kiểm trên production: `/trip/3/` trả về rỗng. Gửi link
+      // đó vào nhóm Zalo là đối phương bấm vào một trang trắng.
+      publicUrl: base ? `${base}/api/trips/${tripId}/recap.html` : null
     });
   }
 }

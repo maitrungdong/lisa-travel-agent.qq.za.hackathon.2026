@@ -390,7 +390,12 @@ export function recapPageUrl(tripId: number): string {
   // `/trips/:id/recap.html` dựng trang ngay lúc request nên lúc nào cũng có, và
   // nội dung y hệt (cùng renderRecapHtml). Link `/trip/:id/` đẹp hơn thì để dành
   // cho Zino gửi trong chat — lúc đó nó đã thật sự dựng xong file.
-  return `${BASE.replace(/\/$/, "")}/trips/${tripId}/recap.html`;
+  //
+  // `?t=` để phá cache của webview Zalo. Server đã gửi `Cache-Control: no-store`
+  // nhưng webview trong ứng dụng vẫn giữ lại bản cũ — deploy trang mới xong mở
+  // ra vẫn thấy trang cũ. Mà kể cả không có chuyện đó thì trang này vẫn phải
+  // luôn mới: mỗi khoản chi hay tấm ảnh thêm vào là nội dung đã khác.
+  return `${BASE.replace(/\/$/, "")}/trips/${tripId}/recap.html?t=${Date.now()}`;
 }
 
 // `resolveActiveTrip` đã chuyển sang ./active-trip — nó cần danh sách chuyến đã
