@@ -425,3 +425,21 @@ CREATE TABLE IF NOT EXISTS settlement_payments (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS settlement_payments_pair_uq
   ON settlement_payments (trip_id, from_user_id, to_user_id);
+
+-- Hành động Zino thực thi từ tab chat của Mini App, sau khi người dùng bấm xác nhận.
+--
+-- Vì sao cần bảng riêng thay vì cứ ghi thẳng: mạng chập, người dùng bấm lại,
+-- webview gửi lại request — ba đường đều dẫn tới hai bản ghi cho một ý định.
+-- `token` do client sinh MỘT LẦN cho mỗi thẻ, nên bấm bao nhiêu lần cũng chỉ
+-- ra đúng một khoản chi. Đây cũng là nơi tra ngược "cái này ai bấm, lúc nào".
+CREATE TABLE IF NOT EXISTS chat_actions (
+  token      varchar(64) PRIMARY KEY,
+  trip_id    bigint      NOT NULL REFERENCES trips(id),
+  kind       varchar(24) NOT NULL,
+  actor      varchar(64) NOT NULL,
+  payload    jsonb       NOT NULL,
+  result_id  bigint,
+  message    text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_actions_trip_idx ON chat_actions (trip_id, created_at);

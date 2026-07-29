@@ -243,9 +243,20 @@ export interface ChatAction {
     | "open_decision"
     | "add_expense"
     | "scan_qr"
-    | "copy_to_chat";
+    | "copy_to_chat"
+    /** Bấm là GHI THẬT — mọi kind khác chỉ điều hướng trong app */
+    | "confirm";
   label: string;
   value?: string;
+  /** Chỉ có với `confirm`. Gửi lại nguyên vẹn; server kiểm lại chứ không tin. */
+  proposal?: unknown;
+}
+
+export interface ChatActResult {
+  done: boolean;
+  message: string;
+  /** true = đã làm trước đó rồi, lần bấm này không tạo thêm bản ghi */
+  alreadyDone?: boolean;
 }
 
 export interface ChatCard {
@@ -273,6 +284,22 @@ export const api = {
     tripId: number,
     body: { message: string; actorZaloId?: string; actorName?: string }
   ) => request<ChatReply>(`/trips/${tripId}/chat`, { method: "POST", body: JSON.stringify(body) }),
+
+  /**
+   * Thực thi một đề xuất Zino vừa soạn.
+   *
+   * `token` do client sinh MỘT LẦN cho mỗi thẻ và gửi lại y nguyên ở mọi lần
+   * bấm. Bấm hai lần, mạng chập rồi thử lại, webview gửi trùng — cả ba đều rơi
+   * vào cùng token nên server chỉ ghi đúng một bản.
+   */
+  chatAct: (
+    tripId: number,
+    body: { token: string; actorZaloId: string; actorName?: string; proposal: unknown }
+  ) =>
+    request<ChatActResult>(`/trips/${tripId}/chat/act`, {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
 
   trips: () => request<TripSummary[]>("/trips"),
   trip: (id: number) => request<Trip>(`/trips/${id}`),

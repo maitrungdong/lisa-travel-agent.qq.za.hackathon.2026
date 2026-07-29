@@ -309,7 +309,8 @@ export class ChatAgent {
   private async callTool(
     tripId: number,
     name: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    ctx: ProposalContext | null
   ): Promise<unknown> {
     switch (name) {
       case "get_trip_overview":
@@ -320,9 +321,68 @@ export class ChatAgent {
         return this.money(tripId);
       case "get_day_plan":
         return this.dayPlan(tripId, typeof input.date === "string" ? input.date : undefined);
+
+      // Ba tool dưới đây KHÔNG chạm vào DB. Chúng kiểm và chuẩn hoá, rồi trả về
+      // đề xuất để code dựng thẻ có nút. Ghi thật chỉ xảy ra ở POST .../chat/act
+      // sau khi người dùng bấm — và ở đó lại kiểm một lần nữa.
+      case "propose_expense":
+        return this.proposeResult(normalizeExpense(input, ctx!), ctx!);
+      case "propose_note":
+        return this.proposeResult(normalizeNote(input), ctx!);
+      case "propose_event":
+        return this.proposeResult(normalizeEvent(input, ctx!), ctx!);
+
       default:
         return { error: `Tool không tồn tại: ${name}` };
     }
+  }
+
+  /**
+   * Kết quả trả cho model sau khi soạn đề xuất.
+   *
+   * Trả cả `preview` để model biết thẻ đang nói gì mà khỏi mô tả lại sai, và trả
+   * `proposal` để cổng kiểm chứng công nhận những con số trong đó — nếu không,
+   * model nhắc lại đúng số tiền vừa đề xuất lại bị chính cổng chặn.
+   */
+  private proposeResult(
+    r: { ok: true; value: Proposal } | { ok: false; reason: string },
+    ctx: ProposalContext
+  ): unknown {
+    if (!r.ok) return { ok: false, error: r.reason };
+    const d = describeProposal(r.value, ctx);
+    return { ok: true, proposal: r.value, preview: `${d.title} — ${d.detail}` };
+  }
+
+  private async proposalContext(tripId: number, actorZaloId?: string): Promise<ProposalContext> {
+    const [trip, members] = await Promise.all([
+      this.trips.getTrip(tripId),
+      this.trips.listMembers(tripId)
+    ]);
+    return {
+      tripStart: new Date(trip.startDate).toISOString(),
+      tripEnd: new Date(trip.endDate).toISOString(),
+      members: members.map((m) => ({ zaloUserId: m.zaloUserId, displayName: m.displayName })),
+      actorZaloId
+    };
+  }
+
+  /**
+   * Thẻ xác nhận — luôn đứng TRƯỚC các thẻ soát lỗi.
+   *
+   * Người dùng vừa nhờ làm một việc thì thứ họ cần thấy đầu tiên là cái nút để
+   * làm việc đó, không phải danh sách vấn đề của chuyến đi.
+   */
+  private proposalCards(proposals: Proposal[], ctx: ProposalContext | null): AgentCard[] {
+    if (!ctx) return [];
+    return proposals.map((p) => {
+      const d = describeProposal(p, ctx);
+      return {
+        level: "neutral" as const,
+        title: d.title,
+        detail: d.detail,
+        actions: [{ kind: "confirm" as const, label: d.confirmLabel, proposal: p }]
+      };
+    });
   }
 
   private async overview(tripId: number) {

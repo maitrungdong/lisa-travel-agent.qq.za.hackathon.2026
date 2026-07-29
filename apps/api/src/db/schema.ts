@@ -617,3 +617,28 @@ export const settlementPayments = pgTable(
   },
   (t) => [uniqueIndex("settlement_payments_pair_uq").on(t.tripId, t.fromUserId, t.toUserId)]
 );
+
+/**
+ * Hành động Zino thực thi từ tab chat Mini App, sau khi người dùng bấm xác nhận.
+ *
+ * `token` do client sinh một lần cho mỗi thẻ. Mạng chập / bấm lại / webview gửi
+ * lại đều rơi vào cùng một token, nên một ý định chỉ ra đúng một bản ghi.
+ */
+export const chatActions = pgTable(
+  "chat_actions",
+  {
+    token: varchar("token", { length: 64 }).primaryKey(),
+    tripId: bigint("trip_id", { mode: "number" })
+      .notNull()
+      .references(() => trips.id),
+    /** expense | note | event */
+    kind: varchar("kind", { length: 24 }).notNull(),
+    actor: varchar("actor", { length: 64 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    /** id bản ghi đã tạo, để tra ngược */
+    resultId: bigint("result_id", { mode: "number" }),
+    message: text("message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (t) => [index("chat_actions_trip_idx").on(t.tripId, t.createdAt)]
+);

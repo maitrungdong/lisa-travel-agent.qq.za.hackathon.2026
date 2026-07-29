@@ -22,10 +22,33 @@ interface Turn {
   degraded?: string;
 }
 
+/** Trạng thái của một nút "xác nhận", theo token. */
+type ActState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "done"; message: string }
+  | { status: "error"; message: string };
+
+/**
+ * Khoá chống bấm hai lần, sinh MỘT LẦN cho mỗi nút lúc câu trả lời về.
+ *
+ * Sinh ở lúc render chứ không phải lúc bấm: bấm hai lần nhanh mà mỗi lần một
+ * token thì server coi là hai ý định khác nhau và ghi hai khoản chi.
+ */
+function newToken(): string {
+  const c = globalThis.crypto;
+  if (c && "randomUUID" in c) return c.randomUUID();
+  return `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const SUGGESTIONS = [
   { label: "Soát lại chuyến đi", message: "Soát lại chuyến đi giúp mình" },
   { label: "Hôm nay có gì", message: "Hôm nay có gì" },
-  { label: "Tiền nong sao rồi", message: "Tiền nong sao rồi" }
+  { label: "Tiền nong sao rồi", message: "Tiền nong sao rồi" },
+  // Hai gợi ý dưới là loại "nhờ làm việc" — có chúng thì người dùng mới biết
+  // khung chat này làm được việc chứ không chỉ trả lời.
+  { label: "Ghi 350k ăn tối", message: "Ghi giúp mình 350k tiền ăn tối" },
+  { label: "Nhắc mang kem chống nắng", message: "Nhớ giúp mình là phải mang kem chống nắng" }
 ];
 
 /**
@@ -47,6 +70,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /** Trạng thái từng nút xác nhận, khoá theo token */
+  const [acts, setActs] = useState<Record<string, ActState>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,12 +97,19 @@ export default function ChatPage() {
         actorZaloId: actor?.zaloUserId,
         actorName: actor?.displayName
       });
+      // Gắn token cho từng nút xác nhận NGAY LÚC NÀY, không đợi tới lúc bấm.
+      const cards = r.cards?.map((c) => ({
+        ...c,
+        actions: c.actions.map((a) =>
+          a.kind === "confirm" ? { ...a, value: a.value ?? newToken() } : a
+        )
+      }));
       setTurns((t) => [
         ...t,
         {
           role: "zino",
           text: r.text,
-          cards: r.cards,
+          cards,
           source: r.source,
           usedTools: r.usedTools,
           gateBlocked: r.gateBlocked,
@@ -122,8 +154,50 @@ export default function ChatPage() {
     setTimeout(() => setToast(null), 2500);
   }
 
+  /**
+   * Bấm nút xác nhận → server ghi thật.
+   *
+   * Ba trạng thái phải phân biệt được trên màn hình, vì đây là lúc dữ liệu thật
+   * thay đổi: đang chạy, xong (kèm việc đã làm), hỏng (kèm lý do server nói và
+   * còn bấm lại được). Nút "xong" bị vô hiệu hoá — token vẫn chống trùng ở
+   * server, nhưng để nút sáng thì người dùng tưởng chưa ăn.
+   */
+  async function confirm(action: ChatAction) {
+    const token = action.value;
+    if (!token || !data) return;
+    const actor = currentActor(tripId, data.members);
+    if (!actor) {
+      show("Chọn tên bạn ở tab Chi phí trước đã, để Zino ghi đúng người.");
+      return;
+    }
+    if (acts[token]?.status === "running" || acts[token]?.status === "done") return;
+
+    setActs((s) => ({ ...s, [token]: { status: "running" } }));
+    try {
+      const r = await api.chatAct(tripId, {
+        token,
+        actorZaloId: actor.zaloUserId,
+        actorName: actor.displayName,
+        proposal: action.proposal
+      });
+      setActs((s) => ({ ...s, [token]: { status: "done", message: r.message } }));
+      reload(); // số liệu vừa đổi — các tab khác đọc lại khi mở
+    } catch (e) {
+      setActs((s) => ({
+        ...s,
+        [token]: {
+          status: "error",
+          message: e instanceof Error ? e.message : "Không thực hiện được"
+        }
+      }));
+    }
+  }
+
   async function run(action: ChatAction) {
     switch (action.kind) {
+      case "confirm":
+        await confirm(action);
+        break;
       case "open_tab":
         navigate(action.value === "expenses" ? "/expenses" : `/${action.value ?? ""}`);
         break;
@@ -170,8 +244,9 @@ export default function ChatPage() {
                 <p className="text-sm font-semibold">Hỏi Zino về chuyến này</p>
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Mình trả lời ngay từ dữ liệu chuyến đi. Việc cần tìm kiếm thật thì hỏi trong nhóm
-                Zalo — ở đó mình research rồi báo lại.
+                Mình trả lời từ dữ liệu chuyến đi, và ghi hộ được khoản chi, ghi chú hay mục lịch
+                trình — mình soạn sẵn, bạn bấm xác nhận thì mới lưu. Việc cần tìm kiếm thật thì hỏi
+                trong nhóm Zalo, ở đó mình research rồi báo lại.
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {SUGGESTIONS.map((s) => (
@@ -219,7 +294,7 @@ export default function ChatPage() {
                 </div>
               </div>
               {t.cards?.map((c, j) => (
-                <ActionCard key={j} card={c} onAction={(a) => void run(a)} />
+                <ActionCard key={j} card={c} acts={acts} onAction={(a) => void run(a)} />
               ))}
             </div>
           )
@@ -281,7 +356,15 @@ const LEVEL_STYLE: Record<string, string> = {
   neutral: "border-border bg-card"
 };
 
-function ActionCard({ card, onAction }: { card: ChatCard; onAction: (a: ChatAction) => void }) {
+function ActionCard({
+  card,
+  acts,
+  onAction
+}: {
+  card: ChatCard;
+  acts: Record<string, ActState>;
+  onAction: (a: ChatAction) => void;
+}) {
   return (
     <div className={`ml-8 space-y-2 rounded-xl border p-3 ${LEVEL_STYLE[card.level] ?? LEVEL_STYLE.info}`}>
       <div className="flex items-start gap-1.5">
@@ -295,17 +378,46 @@ function ActionCard({ card, onAction }: { card: ChatCard; onAction: (a: ChatActi
         </div>
       </div>
       {card.actions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {card.actions.map((a, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onAction(a)}
-              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-            >
-              {a.label}
-            </button>
-          ))}
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-1.5">
+            {card.actions.map((a, i) => {
+              const st = a.kind === "confirm" && a.value ? acts[a.value] : undefined;
+              const done = st?.status === "done";
+              const running = st?.status === "running";
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={done || running}
+                  onClick={() => onAction(a)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+                    done
+                      ? "bg-emerald-600 text-white"
+                      : "bg-primary text-primary-foreground"
+                  }`}
+                >
+                  {running && <Loader2 size={12} className="animate-spin" />}
+                  {done && <Check size={12} />}
+                  {done ? "Đã xong" : running ? "Đang làm…" : a.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Kết quả hiện ngay dưới nút — người dùng vừa thay đổi dữ liệu thật,
+              không được để họ đoán xem đã ăn hay chưa. */}
+          {card.actions.map((a, i) => {
+            const st = a.kind === "confirm" && a.value ? acts[a.value] : undefined;
+            if (!st || st.status === "idle" || st.status === "running") return null;
+            return (
+              <p
+                key={`m${i}`}
+                className={`text-xs ${st.status === "done" ? "text-emerald-700" : "text-rose-600"}`}
+              >
+                {st.status === "done" ? "✓ " : "⚠ "}
+                {st.message}
+              </p>
+            );
+          })}
         </div>
       )}
     </div>

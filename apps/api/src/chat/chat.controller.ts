@@ -1,17 +1,47 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { BadRequestException, Body, Controller, Logger, Param, ParseIntPipe, Post } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Inject,
+  Logger,
+  Param,
+  ParseIntPipe,
+  Post
+} from "@nestjs/common";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
 import { ChatAgent } from "./chat.agent";
+import { DB, type Database } from "../db/database.module";
+import { chatActions, events, expenseSplits, expenses, notes } from "../db/schema";
 import { DecisionsService } from "../decisions/decisions.service";
 import { envStr } from "../pipeline/pipeline.types";
 import { TripsService } from "../trips/trips.service";
+import { revalidate, type Proposal, type ProposalContext } from "./proposals";
 
 const askSchema = z.object({
   message: z.string().min(1).max(1000),
   actorZaloId: z.string().optional(),
   actorName: z.string().optional()
 });
+
+const actSchema = z.object({
+  /** Client sinh một lần cho mỗi thẻ — chống bấm hai lần tạo hai bản ghi */
+  token: z.string().min(8).max(64),
+  actorZaloId: z.string().min(1),
+  actorName: z.string().optional(),
+  proposal: z.unknown()
+});
+
+export interface ChatActResult {
+  done: boolean;
+  /** Câu báo lại cho người dùng, hiện ngay trong khung chat */
+  message: string;
+  /** true = token này đã chạy trước đó, không ghi thêm lần nữa */
+  alreadyDone?: boolean;
+}
 
 /**
  * Một nút bấm trong câu trả lời của Zino.
@@ -27,10 +57,18 @@ export interface ChatAction {
     | "open_decision" // mở thẻ chờ chốt
     | "add_expense" // mở form thêm khoản chi
     | "scan_qr" // mở camera quét QR thanh toán
-    | "copy_to_chat"; // copy câu hỏi để dán vào nhóm Zalo
+    | "copy_to_chat" // copy câu hỏi để dán vào nhóm Zalo
+    | "confirm"; // BẤM LÀ GHI THẬT — gọi POST /trips/:id/chat/act
   label: string;
   /** Tuỳ `kind`: tên tab, id sự kiện, hoặc câu cần copy */
   value?: string;
+  /**
+   * Chỉ có với `kind: "confirm"`. Nội dung sắp được ghi.
+   *
+   * Client gửi lại nguyên vẹn khi bấm, nhưng server KHÔNG tin nó — `revalidate`
+   * kiểm lại từ đầu bằng đúng hàm đã dùng lúc dựng thẻ.
+   */
+  proposal?: Proposal;
 }
 
 export interface ChatCard {
@@ -88,8 +126,158 @@ export class ChatController {
   constructor(
     private readonly trips: TripsService,
     private readonly decisions: DecisionsService,
-    private readonly agent: ChatAgent
+    private readonly agent: ChatAgent,
+    @Inject(DB) private readonly db: Database
   ) {}
+
+  /**
+   * Thực thi một đề xuất sau khi người dùng bấm nút trên thẻ.
+   *
+   * Đây là chỗ DUY NHẤT trong luồng chat ghi được dữ liệu, và nó cố tình nằm
+   * ngoài tầm với của model: model chỉ soạn được đề xuất, con người bấm, rồi
+   * server kiểm lại. Ba việc bắt buộc trước khi ghi:
+   *
+   *  1. `actorZaloId` phải là thành viên của chuyến. Ẩn nút ở UI không phải quyền.
+   *  2. `revalidate` chạy lại toàn bộ luật trên payload client gửi lên — kể cả
+   *     khi thẻ do chính mình dựng ra, đường về vẫn đi qua tay client.
+   *  3. `token` chống bấm hai lần. Ghi token TRƯỚC, ai thua cuộc đua thì nhận
+   *     lại kết quả cũ chứ không tạo bản ghi thứ hai.
+   */
+  @Post("trips/:id/chat/act")
+  async act(
+    @Param("id", ParseIntPipe) tripId: number,
+    @Body() body: unknown
+  ): Promise<ChatActResult> {
+    const parsed = actSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
+    const { token, actorZaloId, proposal } = parsed.data;
+
+    const mem = await this.trips.listMembers(tripId);
+    const actor = mem.find((m) => m.zaloUserId === actorZaloId);
+    if (!actor) throw new ForbiddenException("Bạn không thuộc chuyến đi này");
+
+    const trip = await this.trips.getTrip(tripId);
+    const ctx: ProposalContext = {
+      tripStart: new Date(trip.startDate).toISOString(),
+      tripEnd: new Date(trip.endDate).toISOString(),
+      members: mem.map((m) => ({ zaloUserId: m.zaloUserId, displayName: m.displayName })),
+      actorZaloId
+    };
+
+    const check = revalidate(proposal, ctx);
+    if (!check.ok) throw new BadRequestException(check.reason);
+    const p = check.value;
+
+    // Giành quyền ghi. Thua = ai đó (hoặc chính lần bấm trước) đã làm rồi.
+    const claimed = await this.db
+      .insert(chatActions)
+      .values({ token, tripId, kind: p.kind, actor: actorZaloId, payload: p })
+      .onConflictDoNothing()
+      .returning();
+
+    if (claimed.length === 0) {
+      const [prev] = await this.db
+        .select()
+        .from(chatActions)
+        .where(eq(chatActions.token, token));
+      return {
+        done: true,
+        alreadyDone: true,
+        message: prev?.message ?? "Việc này mình đã làm rồi."
+      };
+    }
+
+    const { resultId, message } = await this.execute(tripId, p, actor);
+    await this.db
+      .update(chatActions)
+      .set({ resultId, message })
+      .where(eq(chatActions.token, token));
+
+    this.log.log(`trip#${tripId}: ${actor.displayName} xác nhận ${p.kind} → #${resultId}`);
+    return { done: true, message };
+  }
+
+  /** Ghi thật. Chỉ được gọi sau khi đã kiểm đủ ba bước ở `act`. */
+  private async execute(
+    tripId: number,
+    p: Proposal,
+    actor: { zaloUserId: string; displayName: string }
+  ): Promise<{ resultId: number; message: string }> {
+    switch (p.kind) {
+      case "expense": {
+        const [row] = await this.db
+          .insert(expenses)
+          .values({
+            tripId,
+            title: p.title,
+            amount: p.amount,
+            category: p.category,
+            paidBy: p.paidBy,
+            paidByName: p.paidByName,
+            spentAt: new Date(),
+            // `source: "user"` chứ KHÔNG phải "zino": khoản này do người dùng
+            // quyết, Zino chỉ soạn hộ. Đặt "zino" thì `isRealTransaction` coi nó
+            // là giao dịch thật và KHOÁ luôn số tiền, không ai sửa lại được.
+            source: "user",
+            createdBy: actor.zaloUserId,
+            splitMode: p.splitWith.length ? "custom" : "equal"
+          })
+          .returning();
+
+        if (p.splitWith.length) {
+          const chosen = p.splitWith;
+          const base = Math.floor(p.amount / chosen.length);
+          const remainder = p.amount - base * chosen.length;
+          const mem = await this.trips.listMembers(tripId);
+          await this.db.insert(expenseSplits).values(
+            chosen.map((id, i) => ({
+              expenseId: row.id,
+              memberZaloId: id,
+              memberName: mem.find((m) => m.zaloUserId === id)?.displayName ?? null,
+              shareAmount: i === 0 ? base + remainder : base
+            }))
+          );
+        }
+        return {
+          resultId: row.id,
+          message: `Đã ghi ${fmtVnd(p.amount)} — ${p.title}, ${p.paidByName} trả.`
+        };
+      }
+
+      case "note": {
+        const [row] = await this.db
+          .insert(notes)
+          .values({
+            tripId,
+            content: p.content,
+            kind: p.noteKind,
+            authorZaloId: actor.zaloUserId,
+            authorName: actor.displayName
+          })
+          .returning();
+        return { resultId: row.id, message: "Đã lưu vào ghi chú của chuyến." };
+      }
+
+      case "event": {
+        const [row] = await this.db
+          .insert(events)
+          .values({
+            tripId,
+            title: p.title,
+            startsAt: new Date(p.startsAt),
+            location: p.location,
+            kind: p.eventKind,
+            note: p.note,
+            estimatedCost: p.estimatedCost,
+            status: "done",
+            source: "user",
+            createdBy: actor.zaloUserId
+          })
+          .returning();
+        return { resultId: row.id, message: `Đã thêm "${p.title}" vào lịch trình.` };
+      }
+    }
+  }
 
   /**
    * MODEL CẦM LÁI (mức B).
@@ -111,7 +299,7 @@ export class ChatController {
     const text = parsed.data.message.trim();
 
     try {
-      const r = await this.agent.run(tripId, text);
+      const r = await this.agent.run(tripId, text, parsed.data.actorZaloId);
       if (r.gateBlocked) {
         this.log.warn(`trip#${tripId}: cổng kiểm chứng chặn câu của model (${r.gateBlocked})`);
       }
@@ -403,3 +591,8 @@ const hhmm = (v: string | Date) => {
   const d = new Date(new Date(v).getTime() + 7 * 3600_000);
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 };
+
+/** Định dạng tiền cho câu báo lại. Không dùng Intl — output đổi theo ICU môi trường. */
+function fmtVnd(n: number): string {
+  return `${Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}₫`;
+}
