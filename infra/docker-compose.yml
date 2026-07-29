@@ -16,6 +16,19 @@
 # │   cd /opt/zino && cp .env.example .env && vi .env && docker compose up -d │
 # └──────────────────────────────────────────────────────────────────────────┘
 
+# ⚠ ĐỌC TRƯỚC KHI ĐỔI DÒNG DƯỚI ĐÂY.
+#
+# Tên project quyết định TIỀN TỐ của tên volume. Đổi nó là Docker trỏ sang một
+# volume KHÁC — và nếu volume đó chưa tồn tại thì compose lặng lẽ tạo một cái
+# RỖNG rồi khởi động Postgres trên đó. Không có lỗi, không có cảnh báo, chỉ là
+# toàn bộ hội thoại / chuyến đi / chi phí biến mất.
+#
+# Suýt xảy ra thật lúc 03:26 ngày 29/07: VPS chạy project `lisa` (từ thời tên
+# cũ), file này ghi `zino`, và một lệnh `cp` đè file đã tạo `zino_pgdata` rỗng.
+# Cứu được nhờ đúng một tình cờ — cổng 5432 còn bị stack cũ chiếm.
+#
+# Nên volume ở cuối file này nay ĐẶT TÊN CỨNG, không suy ra từ project name.
+# Đổi `name:` ở đây giờ chỉ đổi tên container, không đụng tới dữ liệu.
 name: zino
 
 services:
@@ -159,3 +172,13 @@ services:
 
 volumes:
   pgdata:
+    # Tên THẬT của volume, cố định, KHÔNG ghép tiền tố project name.
+    #
+    # Mặc định là `lisa_pgdata` vì đó là volume đang chứa dữ liệu production —
+    # tên có từ thời dự án còn gọi là Lisa. Trông lệch với tên Zino, nhưng đổi
+    # tên volume nghĩa là bỏ lại dữ liệu, nên cứ để. Muốn đổi thì phải
+    # `docker run --rm -v lisa_pgdata:/from -v ten_moi:/to alpine cp -a /from/. /to/`
+    # trước, rồi mới sửa dòng này.
+    #
+    # Máy dev mới muốn DB riêng: đặt PGDATA_VOLUME=zino_dev_pgdata trong .env.
+    name: ${PGDATA_VOLUME:-lisa_pgdata}
