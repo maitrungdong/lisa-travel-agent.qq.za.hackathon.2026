@@ -443,3 +443,9 @@ CREATE TABLE IF NOT EXISTS chat_actions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS chat_actions_trip_idx ON chat_actions (trip_id, created_at);
+
+-- Ảnh và link đặt cho từng phương án, để thẻ chọn chỗ ở trong Mini App nhìn ra
+-- một tấm thẻ phòng chứ không phải một dòng chữ. Nullable: phương án do agent
+-- tự nghĩ ra (không gắn với OA nào) thì không có ảnh, và thẻ vẫn phải đẹp.
+ALTER TABLE decision_options ADD COLUMN IF NOT EXISTS image_url text;
+ALTER TABLE decision_options ADD COLUMN IF NOT EXISTS booking_url text;

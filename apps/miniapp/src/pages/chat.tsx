@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, Bot, Check, Loader2, QrCode, Send, Sparkles } from "lucide-react";
-import { api, type ChatAction, type ChatCard, type ChatReply } from "../lib/api";
+import {
+  api,
+  type ChatAction,
+  type ChatCard,
+  type ChatListing,
+  type ChatReply
+} from "../lib/api";
 import { currentActor } from "../lib/actor";
 import { scanQr } from "../lib/zalo";
 import { parsePaymentQr, suggestTitle } from "../lib/qr";
@@ -72,6 +78,10 @@ export default function ChatPage() {
   const [toast, setToast] = useState<string | null>(null);
   /** Trạng thái từng nút xác nhận, khoá theo token */
   const [acts, setActs] = useState<Record<string, ActState>>({});
+  /** Phương án đang chọn của mỗi lưới: khoá lưới → token phương án */
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  /** Đang gọi server cho phương án nào (khoá lưới + token) */
+  const [picking, setPicking] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -98,11 +108,14 @@ export default function ChatPage() {
         actorName: actor?.displayName
       });
       // Gắn token cho từng nút xác nhận NGAY LÚC NÀY, không đợi tới lúc bấm.
+      // Mỗi phương án trong lưới cũng có token riêng — chọn lại chỗ khác là một
+      // ý định khác, không được gộp chung một khoá với chỗ đã chọn trước.
       const cards = r.cards?.map((c) => ({
         ...c,
         actions: c.actions.map((a) =>
           a.kind === "confirm" ? { ...a, value: a.value ?? newToken() } : a
-        )
+        ),
+        listings: c.listings?.map((l) => ({ ...l, token: newToken() }))
       }));
       setTurns((t) => [
         ...t,
@@ -162,6 +175,38 @@ export default function ChatPage() {
    * còn bấm lại được). Nút "xong" bị vô hiệu hoá — token vẫn chống trùng ở
    * server, nhưng để nút sáng thì người dùng tưởng chưa ăn.
    */
+  /**
+   * Chọn một phương án trong lưới.
+   *
+   * Tách khỏi `confirm` vì hai luật khác nhau: nút xác nhận bấm xong là khoá
+   * (ghi khoản chi hai lần là sai), còn ở đây ĐỔI Ý là chuyện bình thường —
+   * chọn chỗ khác rồi quay lại chỗ cũ vẫn phải được. Server đã lo phần thay
+   * thế nên bấm lại bao nhiêu lần cũng chỉ có một chỗ ở trong lịch trình.
+   */
+  async function pick(cardKey: string, token: string, proposal: unknown) {
+    if (!data) return;
+    const actor = currentActor(tripId, data.members);
+    if (!actor) {
+      show("Chọn tên bạn ở tab Chi phí trước đã, để Zino ghi đúng người.");
+      return;
+    }
+    setPicking(cardKey + token);
+    try {
+      await api.chatAct(tripId, {
+        token,
+        actorZaloId: actor.zaloUserId,
+        actorName: actor.displayName,
+        proposal
+      });
+      setPicked((s) => ({ ...s, [cardKey]: token }));
+      reload();
+    } catch (e) {
+      show(e instanceof Error ? e.message : "Không chọn được, thử lại nhé.");
+    } finally {
+      setPicking(null);
+    }
+  }
+
   async function confirm(action: ChatAction) {
     const token = action.value;
     if (!token || !data) return;
@@ -294,7 +339,16 @@ export default function ChatPage() {
                 </div>
               </div>
               {t.cards?.map((c, j) => (
-                <ActionCard key={j} card={c} acts={acts} onAction={(a) => void run(a)} />
+                <ActionCard
+                  key={j}
+                  card={c}
+                  acts={acts}
+                  cardKey={`${i}-${j}`}
+                  pickedToken={picked[`${i}-${j}`]}
+                  pickingKey={picking}
+                  onPick={(token, proposal) => void pick(`${i}-${j}`, token, proposal)}
+                  onAction={(a) => void run(a)}
+                />
               ))}
             </div>
           )
@@ -356,13 +410,120 @@ const LEVEL_STYLE: Record<string, string> = {
   neutral: "border-border bg-card"
 };
 
+/**
+ * Tile thay ảnh khi phương án không có ảnh thật.
+ *
+ * Danh bạ đối tác hiện KHÔNG dòng nào có ảnh. Dán một tấm ảnh stock vào đó là
+ * nói dối người dùng về một chỗ ở họ sắp chọn, nên thay bằng tile chữ cái đầu
+ * với màu suy ra từ chính cái tên — luôn ra cùng một màu cho cùng một chỗ, nhìn
+ * ra chủ ý chứ không ra lỗi thiếu ảnh.
+ */
+const TILE_COLORS = [
+  "bg-teal-100 text-teal-700",
+  "bg-amber-100 text-amber-700",
+  "bg-indigo-100 text-indigo-700",
+  "bg-rose-100 text-rose-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-violet-100 text-violet-700"
+];
+
+function tileClass(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return TILE_COLORS[h % TILE_COLORS.length];
+}
+
+function ListingGrid({
+  listings,
+  pickedToken,
+  pickingKey,
+  cardKey,
+  onPick
+}: {
+  listings: (ChatListing & { token?: string })[];
+  pickedToken?: string;
+  pickingKey: string | null;
+  cardKey: string;
+  onPick: (token: string, proposal: unknown) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {listings.map((l, i) => {
+        const token = l.token ?? String(i);
+        const chosen = pickedToken === token;
+        const busy = pickingKey === cardKey + token;
+        return (
+          <div
+            key={token}
+            className={`flex gap-3 rounded-xl border bg-card p-2.5 transition-colors ${
+              chosen ? "border-primary bg-primary/5" : "border-border"
+            }`}
+          >
+            {l.imageUrl ? (
+              <img
+                src={l.imageUrl}
+                alt=""
+                loading="lazy"
+                className="size-16 shrink-0 rounded-lg object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden
+                className={`flex size-16 shrink-0 items-center justify-center rounded-lg text-lg font-bold ${tileClass(l.title)}`}
+              >
+                {l.title.trim().charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold leading-snug">{l.title}</p>
+              {l.detail && (
+                <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                  {l.detail}
+                </p>
+              )}
+              <div className="mt-1.5 flex items-center gap-2">
+                {l.priceHint && (
+                  <span className="truncate text-xs font-semibold text-primary">{l.priceHint}</span>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onPick(token, l.proposal)}
+                  className={`ml-auto flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+                    chosen
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border text-foreground"
+                  }`}
+                >
+                  {busy && <Loader2 size={12} className="animate-spin" />}
+                  {chosen && !busy && <Check size={12} />}
+                  {chosen ? "Đã chọn" : "Chọn"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ActionCard({
   card,
   acts,
+  cardKey,
+  pickedToken,
+  pickingKey,
+  onPick,
   onAction
 }: {
   card: ChatCard;
   acts: Record<string, ActState>;
+  cardKey: string;
+  pickedToken?: string;
+  pickingKey: string | null;
+  onPick: (token: string, proposal: unknown) => void;
   onAction: (a: ChatAction) => void;
 }) {
   return (
@@ -377,6 +538,16 @@ function ActionCard({
           {card.detail && <p className="text-xs text-muted-foreground">{card.detail}</p>}
         </div>
       </div>
+
+      {card.listings && card.listings.length > 0 && (
+        <ListingGrid
+          listings={card.listings}
+          pickedToken={pickedToken}
+          pickingKey={pickingKey}
+          cardKey={cardKey}
+          onPick={onPick}
+        />
+      )}
       {card.actions.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap gap-1.5">

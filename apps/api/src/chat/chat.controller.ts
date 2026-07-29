@@ -10,7 +10,7 @@ import {
   ParseIntPipe,
   Post
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { checkTrip, summarize, type Issue } from "../checks/itinerary-check";
 import { ChatAgent } from "./chat.agent";
@@ -34,6 +34,15 @@ const actSchema = z.object({
   actorName: z.string().optional(),
   proposal: z.unknown()
 });
+
+/**
+ * Dấu nhận diện mục chỗ ở do người dùng chọn từ tab chat.
+ *
+ * Dùng `booking_ref` chứ không thêm cột mới: cột đã có sẵn, và ý nghĩa "mục này
+ * gắn với một lựa chọn cụ thể" thì khớp. Đổi chuỗi này là mọi lựa chọn cũ thành
+ * mồ côi — sẽ không bị xoá khi chọn chỗ khác.
+ */
+const CHAT_STAY_REF = "chat-stay";
 
 export interface ChatActResult {
   done: boolean;
@@ -71,11 +80,23 @@ export interface ChatAction {
   proposal?: Proposal;
 }
 
+/** Một phương án chỗ ở trong lưới thẻ. Dữ liệu nguyên bản từ danh bạ đối tác. */
+export interface ChatListing {
+  title: string;
+  detail?: string | null;
+  priceHint?: string | null;
+  imageUrl?: string | null;
+  tags?: string | null;
+  proposal: Proposal;
+}
+
 export interface ChatCard {
   level: "error" | "warn" | "info" | "neutral";
   title: string;
   detail?: string;
   actions: ChatAction[];
+  /** Có = thẻ này là lưới phương án, mỗi phương án một nút Chọn riêng */
+  listings?: ChatListing[];
 }
 
 export interface ChatReply {
@@ -175,7 +196,10 @@ export class ChatController {
       .onConflictDoNothing()
       .returning();
 
-    if (claimed.length === 0) {
+    // `stay` tự nó đã idempotent (xoá chỗ cũ rồi ghi chỗ mới), nên KHÔNG chặn
+    // theo token. Chặn thì hỏng: chọn A → chọn B → chọn lại A sẽ trả về "đã làm
+    // rồi" trong khi trong lịch trình vẫn đang là B.
+    if (claimed.length === 0 && p.kind !== "stay") {
       const [prev] = await this.db
         .select()
         .from(chatActions)
@@ -190,7 +214,7 @@ export class ChatController {
     const { resultId, message } = await this.execute(tripId, p, actor);
     await this.db
       .update(chatActions)
-      .set({ resultId, message })
+      .set({ resultId, message, payload: p })
       .where(eq(chatActions.token, token));
 
     this.log.log(`trip#${tripId}: ${actor.displayName} xác nhận ${p.kind} → #${resultId}`);
@@ -258,6 +282,41 @@ export class ChatController {
         return { resultId: row.id, message: "Đã lưu vào ghi chú của chuyến." };
       }
 
+      /**
+       * Chỗ ở chọn từ chat — MỘT chuyến giữ đúng MỘT dòng.
+       *
+       * Xoá dòng cũ trước khi ghi dòng mới, nhận diện bằng `bookingRef`. Bấm thử
+       * ba phương án mà không có bước xoá này thì lịch trình có ba khách sạn
+       * chồng lên nhau, rồi `checkTrip` lại báo "trùng giờ" — Zino tự tạo lỗi
+       * cho mình. Xoá + ghi cũng làm thao tác này idempotent tự nhiên, nên nó
+       * không cần tới khoá chống bấm hai lần.
+       */
+      case "stay": {
+        await this.db
+          .delete(events)
+          .where(and(eq(events.tripId, tripId), eq(events.bookingRef, CHAT_STAY_REF)));
+
+        const [row] = await this.db
+          .insert(events)
+          .values({
+            tripId,
+            title: p.title,
+            startsAt: new Date(p.startsAt),
+            location: p.location,
+            kind: "stay",
+            note: [p.note, p.priceHint ? `Giá tham khảo: ${p.priceHint}` : null]
+              .filter(Boolean)
+              .join(" · ") || null,
+            status: "done",
+            source: "user",
+            bookingRef: CHAT_STAY_REF,
+            partnerOaId: p.partnerOaId,
+            createdBy: actor.zaloUserId
+          })
+          .returning();
+        return { resultId: row.id, message: `Đã chốt "${p.title}" vào lịch trình.` };
+      }
+
       case "event": {
         const [row] = await this.db
           .insert(events)
@@ -275,6 +334,26 @@ export class ChatController {
           })
           .returning();
         return { resultId: row.id, message: `Đã thêm "${p.title}" vào lịch trình.` };
+      }
+
+      /**
+       * `kind: "stay"` CHƯA được cài đặt.
+       *
+       * `Proposal` khai bốn loại — expense, note, event, stay — nhưng switch này
+       * mới xử lý ba. Thiếu nhánh cuối làm TypeScript báo hàm không có đường
+       * return, và build production gãy.
+       *
+       * Ném lỗi rõ ràng thay vì trả về một giá trị giả: người dùng bấm nút mà
+       * không có gì được ghi, lại thấy báo thành công, là kiểu hỏng tệ nhất —
+       * họ tin dữ liệu đã lưu và chỉ phát hiện ra khi cần tới nó.
+       *
+       * TODO: quyết định chỗ ở ghi vào đâu (events kind="stay" hay bảng riêng)
+       * rồi thay nhánh này.
+       */
+      default: {
+        const kind = (p as { kind?: string }).kind ?? "?";
+        this.log.error(`trip#${tripId}: chưa hỗ trợ ghi proposal kind="${kind}"`);
+        throw new BadRequestException(`Loại đề xuất "${kind}" chưa được hỗ trợ`);
       }
     }
   }

@@ -573,6 +573,10 @@ export const decisionOptions = pgTable(
     detail: text("detail"),
     price: bigint("price", { mode: "number" }),
     partnerOaId: varchar("partner_oa_id", { length: 64 }),
+    /** Ảnh minh hoạ. Rỗng = thẻ tự dựng tile chữ, KHÔNG dán ảnh stock giả. */
+    imageUrl: text("image_url"),
+    /** Link đặt/xem thêm, thường là deeplink OA đối tác */
+    bookingUrl: text("booking_url"),
     sortOrder: integer("sort_order").notNull().default(0)
   },
   (t) => [index("decision_options_dec_idx").on(t.decisionId, t.sortOrder)]

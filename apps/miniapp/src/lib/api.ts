@@ -259,11 +259,22 @@ export interface ChatActResult {
   alreadyDone?: boolean;
 }
 
+export interface ChatListing {
+  title: string;
+  detail?: string | null;
+  priceHint?: string | null;
+  imageUrl?: string | null;
+  tags?: string | null;
+  proposal: unknown;
+}
+
 export interface ChatCard {
   level: "error" | "warn" | "info" | "neutral";
   title: string;
   detail?: string;
   actions: ChatAction[];
+  /** Có = lưới phương án có ảnh, mỗi phương án một nút Chọn riêng */
+  listings?: ChatListing[];
 }
 
 export interface ChatReply {

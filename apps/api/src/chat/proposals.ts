@@ -46,6 +46,25 @@ export type Proposal =
       splitWith: string[];
     }
   | { kind: "note"; content: string; noteKind: NoteKind }
+  /**
+   * Chốt chỗ ở vào kế hoạch.
+   *
+   * Tách riêng khỏi `event` dù cùng ghi vào bảng events, vì nó có một luật mà
+   * `event` không có: MỘT chuyến chỉ giữ MỘT chỗ ở chọn từ chat. Chọn chỗ khác
+   * là thay chỗ cũ, không phải thêm dòng thứ hai. Không có luật đó thì bấm thử
+   * ba phương án là lịch trình có ba khách sạn chồng nhau.
+   */
+  | {
+      kind: "stay";
+      title: string;
+      startsAt: string;
+      location: string | null;
+      /** Giá tham khảo dạng chữ ("1,2tr–2,5tr/đêm") — danh bạ không lưu số */
+      priceHint: string | null;
+      partnerOaId: string | null;
+      imageUrl: string | null;
+      note: string | null;
+    }
   | {
       kind: "event";
       title: string;
@@ -208,6 +227,56 @@ export function normalizeEvent(raw: Record<string, unknown>, ctx: ProposalContex
   };
 }
 
+/**
+ * Chốt chỗ ở. Ngày nhận phòng mặc định là NGÀY ĐẦU chuyến, 14:00 giờ VN.
+ *
+ * Không bắt model tự chọn ngày: nó không có lý do gì để biết, và đoán sai thì
+ * mục lịch trình rơi vào ngày trống rồi `checkTrip` lại báo lỗi.
+ */
+export function normalizeStay(raw: Record<string, unknown>, ctx: ProposalContext): Normalized<Proposal> {
+  const title = str(raw.title);
+  if (!title) return { ok: false, reason: "Thiếu tên chỗ ở." };
+  if (title.length > 200) return { ok: false, reason: "Tên chỗ ở dài quá 200 ký tự." };
+
+  const date = str(raw.date) || ictDay(ctx.tripStart);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, reason: "Ngày nhận phòng không đúng dạng yyyy-mm-dd." };
+  }
+  const from = ictDay(ctx.tripStart);
+  const to = ictDay(ctx.tripEnd);
+  if (date < from || date > to) {
+    return { ok: false, reason: `Ngày ${date} nằm ngoài chuyến đi (${from} → ${to}).` };
+  }
+
+  const time = str(raw.time) || "14:00";
+  if (!/^\d{2}:\d{2}$/.test(time)) return { ok: false, reason: "Giờ nhận phòng không đúng dạng HH:mm." };
+
+  const at = new Date(`${date}T${time}:00+07:00`);
+  if (Number.isNaN(at.getTime())) return { ok: false, reason: "Ngày giờ nhận phòng không hợp lệ." };
+
+  return {
+    ok: true,
+    value: {
+      kind: "stay",
+      title,
+      startsAt: at.toISOString(),
+      location: str(raw.location) || null,
+      priceHint: str(raw.priceHint) || null,
+      partnerOaId: str(raw.partnerOaId) || null,
+      imageUrl: safeImageUrl(str(raw.imageUrl)),
+      note: str(raw.note) || null
+    }
+  };
+}
+
+/**
+ * Ảnh chỉ nhận http(s). Ảnh đi từ danh bạ ra client rồi quay lại server, nên
+ * vẫn phải lọc: `javascript:` hay `data:` lọt vào `<img src>` là chuyện có thật.
+ */
+function safeImageUrl(s: string): string | null {
+  return /^https?:\/\/[^\s'"<>]+$/i.test(s) ? s : null;
+}
+
 /** Khớp theo zaloUserId trước, rồi tới tên (không phân biệt hoa thường). */
 function findMember(
   wanted: string,
@@ -229,6 +298,20 @@ export function revalidate(p: unknown, ctx: ProposalContext): Normalized<Proposa
       return normalizeExpense(raw, ctx);
     case "note":
       return normalizeNote(raw);
+    case "stay":
+      return normalizeStay(
+        {
+          ...raw,
+          date: typeof raw.startsAt === "string" ? ictDay(raw.startsAt) : "",
+          time:
+            typeof raw.startsAt === "string"
+              ? new Date(new Date(raw.startsAt).getTime() + ICT_OFFSET_MS)
+                  .toISOString()
+                  .slice(11, 16)
+              : ""
+        },
+        ctx
+      );
     case "event":
       // `normalizeEvent` nhận date/time rời, còn đề xuất đã gộp thành `startsAt`.
       return normalizeEvent(
@@ -289,6 +372,15 @@ export function describeProposal(
           (p.location ? ` · ${p.location}` : "") +
           (p.estimatedCost ? ` · ${formatVnd(p.estimatedCost)}` : ""),
         confirmLabel: "Thêm vào lịch"
+      };
+    }
+    case "stay": {
+      const d = new Date(new Date(p.startsAt).getTime() + ICT_OFFSET_MS);
+      const ddmm = `${d.toISOString().slice(8, 10)}/${d.toISOString().slice(5, 7)}`;
+      return {
+        title: `Chốt chỗ ở: ${p.title}`,
+        detail: `Nhận phòng ${ddmm}` + (p.location ? ` · ${p.location}` : ""),
+        confirmLabel: "Chọn"
       };
     }
   }

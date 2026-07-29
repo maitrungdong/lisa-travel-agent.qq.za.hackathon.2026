@@ -4,6 +4,7 @@ import {
   normalizeEvent,
   normalizeExpense,
   normalizeNote,
+  normalizeStay,
   revalidate,
   type ProposalContext
 } from "./proposals";
@@ -156,6 +157,42 @@ describe("normalizeEvent", () => {
     expect(r.ok).toBe(true);
     if (!r.ok || r.value.kind !== "event") return;
     expect(r.value.startsAt).toBe("2026-08-13T01:00:00.000Z");
+  });
+});
+
+describe("normalizeStay", () => {
+  it("mặc định nhận phòng ngày đầu chuyến, 14:00 giờ VN", () => {
+    const r = normalizeStay({ title: "Homestay Vĩnh Hải" }, ctx);
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.value.kind !== "stay") return;
+    expect(r.value.startsAt).toBe("2026-08-12T07:00:00.000Z");
+  });
+
+  it("giữ khoảng giá dạng CHỮ — danh bạ không lưu số, đừng bịa ra số", () => {
+    const r = normalizeStay({ title: "X", priceHint: "1,2tr–1,8tr/đêm cả căn" }, ctx);
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.value.kind !== "stay") return;
+    expect(r.value.priceHint).toBe("1,2tr–1,8tr/đêm cả căn");
+  });
+
+  /** Ảnh đi từ danh bạ ra client rồi quay lại server — vẫn phải lọc. */
+  it("chỉ nhận ảnh http(s), chặn javascript:/data:", () => {
+    const bad = normalizeStay({ title: "X", imageUrl: "javascript:alert(1)" }, ctx);
+    expect(bad.ok).toBe(true);
+    if (!bad.ok || bad.value.kind !== "stay") return;
+    expect(bad.value.imageUrl).toBe(null);
+
+    const good = normalizeStay({ title: "X", imageUrl: "https://cdn.x/a.jpg" }, ctx);
+    if (!good.ok || good.value.kind !== "stay") return;
+    expect(good.value.imageUrl).toBe("https://cdn.x/a.jpg");
+  });
+
+  it("ngày nhận phòng ngoài chuyến thì từ chối", () => {
+    expect(normalizeStay({ title: "X", date: "2026-09-01" }, ctx)).toMatchObject({ ok: false });
+  });
+
+  it("thiếu tên thì từ chối", () => {
+    expect(normalizeStay({}, ctx)).toMatchObject({ ok: false });
   });
 });
 

@@ -7,6 +7,7 @@ import { envStr } from "../pipeline/pipeline.types";
 import { gateReply } from "./grounding";
 import {
   describeProposal,
+  ictDay,
   normalizeEvent,
   normalizeExpense,
   normalizeNote,
@@ -47,11 +48,30 @@ export interface AgentAction {
   proposal?: Proposal;
 }
 
+/**
+ * Một phương án chỗ ở trong thẻ listing.
+ *
+ * `proposal` do CODE dựng từ dòng thật trong danh bạ, không đi qua tay model —
+ * model chỉ quyết định có gọi `search_stays` hay không, còn tên, giá và ảnh
+ * trên thẻ đều là dữ liệu nguyên bản. Model không bịa được một khách sạn.
+ */
+export interface AgentListing {
+  title: string;
+  detail?: string | null;
+  /** Giá dạng chữ vì danh bạ lưu chữ ("1,2tr–2,5tr/đêm"), không lưu số */
+  priceHint?: string | null;
+  imageUrl?: string | null;
+  tags?: string | null;
+  proposal: Proposal;
+}
+
 export interface AgentCard {
   level: "error" | "warn" | "info" | "neutral";
   title: string;
   detail?: string;
   actions: AgentAction[];
+  /** Có = thẻ này là lưới phương án có ảnh, mỗi cái một nút Chọn riêng */
+  listings?: AgentListing[];
 }
 
 export interface AgentReply {
@@ -123,6 +143,18 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: { date: { type: "string", description: "yyyy-mm-dd, giờ VN" } },
+      required: []
+    }
+  },
+  {
+    name: "search_stays",
+    description:
+      "Tra chỗ ở trong danh bạ đối tác của Zino, theo điểm đến của chuyến. Trả về tên, mô tả, khoảng giá tham khảo và ảnh. App sẽ tự hiện thành lưới thẻ có nút Chọn — BẠN KHÔNG cần liệt kê lại từng chỗ trong câu trả lời. Danh bạ này là nguồn duy nhất; không có kết quả thì nói thẳng là chưa có đối tác ở đó, TUYỆT ĐỐI không tự nghĩ ra khách sạn.",
+    input_schema: {
+      type: "object",
+      properties: {
+        keyword: { type: "string", description: "Lọc thêm theo tên/mô tả, vd 'gần biển'" }
+      },
       required: []
     }
   },
@@ -200,6 +232,8 @@ export class ChatAgent {
     let unpaidCount = 0;
     /** Đề xuất model đã soạn trong lượt này — mỗi cái thành một thẻ có nút thật */
     const proposals: Proposal[] = [];
+    /** Chỗ ở tra được — code dựng thành lưới thẻ, không qua tay model */
+    let stays: AgentListing[] = [];
     /** Nạp một lần, dùng cho mọi tool propose_* trong lượt */
     let ctx: ProposalContext | null = null;
 
@@ -245,7 +279,11 @@ export class ChatAgent {
           }
           return {
             text: gate.text,
-            cards: [...this.proposalCards(proposals, ctx), ...this.buildCards(issues, unpaidCount)],
+            cards: [
+              ...this.stayCard(stays),
+              ...this.proposalCards(proposals, ctx),
+              ...this.buildCards(issues, unpaidCount)
+            ],
             source: gate.passed ? "llm" : "deterministic",
             usedTools,
             gateBlocked: gate.passed ? undefined : gate.reason
@@ -256,7 +294,9 @@ export class ChatAgent {
 
         const results: Anthropic.ToolResultBlockParam[] = [];
         for (const use of toolUses) {
-          if (use.name.startsWith("propose_")) ctx ??= await this.proposalContext(tripId, actorZaloId);
+          if (use.name.startsWith("propose_") || use.name === "search_stays") {
+            ctx ??= await this.proposalContext(tripId, actorZaloId);
+          }
           const out = await this.callTool(
             tripId,
             use.name,
@@ -271,6 +311,7 @@ export class ChatAgent {
           }
           const proposed = (out as { proposal?: Proposal }).proposal;
           if (proposed) proposals.push(proposed);
+          if (use.name === "search_stays") stays = (out as { listings: AgentListing[] }).listings;
           collected[use.name] = out;
           if (!usedTools.includes(use.name)) usedTools.push(use.name);
           results.push({
@@ -325,6 +366,9 @@ export class ChatAgent {
       // Ba tool dưới đây KHÔNG chạm vào DB. Chúng kiểm và chuẩn hoá, rồi trả về
       // đề xuất để code dựng thẻ có nút. Ghi thật chỉ xảy ra ở POST .../chat/act
       // sau khi người dùng bấm — và ở đó lại kiểm một lần nữa.
+      case "search_stays":
+        return this.searchStays(tripId, ctx!, typeof input.keyword === "string" ? input.keyword : undefined);
+
       case "propose_expense":
         return this.proposeResult(normalizeExpense(input, ctx!), ctx!);
       case "propose_note":
@@ -351,6 +395,72 @@ export class ChatAgent {
     if (!r.ok) return { ok: false, error: r.reason };
     const d = describeProposal(r.value, ctx);
     return { ok: true, proposal: r.value, preview: `${d.title} — ${d.detail}` };
+  }
+
+  /**
+   * Tra chỗ ở trong danh bạ đối tác — nguồn DUY NHẤT, và cố tình như vậy.
+   *
+   * Zino không có tích hợp đặt phòng nào: không Booking, không Agoda, không lịch
+   * phòng trống. Nếu để model tự nghĩ ra khách sạn thì nó sẽ nghĩ ra rất trôi
+   * chảy, kèm giá và địa chỉ nghe như thật — và người dùng sẽ gọi tới một nơi
+   * không tồn tại. Nên tool này chỉ đọc `partner_oas`, hết chỗ thì trả rỗng, và
+   * prompt cấm model bịa thêm.
+   */
+  private async searchStays(
+    tripId: number,
+    ctx: ProposalContext,
+    keyword?: string
+  ): Promise<{ found: number; source: string; listings: AgentListing[] }> {
+    const trip = await this.trips.getTrip(tripId);
+    const rows = await this.trips.listPartners({ city: trip.destination, category: "HOTEL", limit: 8 });
+
+    const kw = keyword?.trim().toLowerCase();
+    const matched = kw
+      ? rows.filter((r) =>
+          `${r.name} ${r.description ?? ""} ${r.tags ?? ""}`.toLowerCase().includes(kw)
+        )
+      : rows;
+    // Lọc quá tay thành rỗng thì thà trả cả danh sách còn hơn trả không có gì.
+    const picked = matched.length > 0 ? matched : rows;
+
+    // Nhận phòng: ngày đầu chuyến, 14:00 giờ VN.
+    const checkIn = `${ictDay(ctx.tripStart)}T14:00:00+07:00`;
+
+    return {
+      found: picked.length,
+      source: "Danh bạ đối tác của Zino (không phải lịch phòng trống thời gian thực)",
+      listings: picked.map((r) => ({
+        title: r.name,
+        detail: r.description,
+        priceHint: r.priceHint,
+        imageUrl: r.avatarUrl,
+        tags: r.tags,
+        proposal: {
+          kind: "stay",
+          title: r.name,
+          startsAt: new Date(checkIn).toISOString(),
+          location: r.city,
+          priceHint: r.priceHint,
+          partnerOaId: r.oaId,
+          imageUrl: r.avatarUrl,
+          note: r.description
+        } satisfies Proposal
+      }))
+    };
+  }
+
+  /** Lưới thẻ chỗ ở. Nút Chọn nằm trên TỪNG phương án, không phải trên thẻ. */
+  private stayCard(listings: AgentListing[]): AgentCard[] {
+    if (listings.length === 0) return [];
+    return [
+      {
+        level: "neutral",
+        title: `${listings.length} chỗ ở trong danh bạ đối tác`,
+        detail: "Chọn một chỗ để lưu vào lịch trình. Đổi ý thì chọn lại chỗ khác.",
+        actions: [],
+        listings
+      }
+    ];
   }
 
   private async proposalContext(tripId: number, actorZaloId?: string): Promise<ProposalContext> {

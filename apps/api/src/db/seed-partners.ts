@@ -20,6 +20,48 @@ import { partnerOas } from "./schema";
  * Chạy: pnpm --filter api exec tsx src/db/seed-partners.ts
  */
 const PARTNERS = [
+  // ── Nha Trang ────────────────────────────────────────────────────────
+  // Thêm vì tab "Hỏi Zino" có tool `search_stays` tra đúng bảng này theo điểm
+  // đến của chuyến, mà chuyến Nha Trang đang chạy thật thì danh bạ lại rỗng —
+  // hỏi chỗ ở là Zino trả về "chưa có đối tác ở đó".
+  // ⚠ oa_id ở đây là MẪU. Bấm "Mở chat" sẽ báo không tìm thấy OA.
+  {
+    oaId: "demo-oa-hostel-nhatrang",
+    name: "Nhà nghỉ dorm gần Bãi Sau",
+    category: "HOTEL",
+    city: "Nha Trang",
+    description: "Dorm 6-8 giường và phòng tập thể, khu Trần Phú, đi bộ ra biển 3 phút",
+    priceHint: "150k–250k/giường/đêm",
+    tags: "giá rẻ,gần biển,cho nhóm đông,ba lô"
+  },
+  {
+    oaId: "demo-oa-homestay-nhatrang",
+    name: "Homestay nguyên căn Vĩnh Hải",
+    category: "HOTEL",
+    city: "Nha Trang",
+    description: "Nhà nguyên căn 3 phòng ngủ, có bếp và phòng khách chung, cách biển 10 phút đi bộ",
+    priceHint: "1,2tr–1,8tr/đêm cả căn",
+    tags: "nguyên căn,có bếp,cho nhóm đông,tụ tập"
+  },
+  {
+    oaId: "demo-oa-hotel-trancphu-nhatrang",
+    name: "Khách sạn 3 sao Trần Phú",
+    category: "HOTEL",
+    city: "Nha Trang",
+    description: "Phòng đôi và phòng gia đình view biển, có ăn sáng, lễ tân 24/7",
+    priceHint: "700k–1,1tr/phòng/đêm",
+    tags: "view biển,có ăn sáng,3 sao,cho gia đình"
+  },
+  {
+    oaId: "demo-oa-resort-baidai-nhatrang",
+    name: "Resort Bãi Dài",
+    category: "HOTEL",
+    city: "Nha Trang",
+    description: "Resort ven biển Bãi Dài, hồ bơi vô cực, xa trung tâm 25km — hợp nghỉ dưỡng",
+    priceHint: "2,5tr–4tr/phòng/đêm",
+    tags: "resort,hồ bơi,nghỉ dưỡng,yên tĩnh"
+  },
+
   // ── Vũng Tàu — THÀNH PHỐ DEMO CHÍNH ──────────────────────────────────
   // Malibu là OA THẬT, đã xác thực → dùng cho khoảnh khắc openChat trên sân khấu.
   // Mấy dòng còn lại vẫn là mẫu; thay dần bằng OA thật khi tìm được.
