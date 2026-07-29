@@ -21,8 +21,37 @@ import type { CreateActivity, CreateEvent, CreateExpense, CreateTrip } from "./t
 export class TripsService {
   constructor(@Inject(DB) private readonly db: Database) {}
 
-  listTrips() {
-    return this.db.select().from(trips).orderBy(desc(trips.createdAt));
+  /**
+   * Danh sách chuyến kèm số liệu tóm tắt cho sheet đổi chuyến của Mini App.
+   *
+   * Vì sao gộp sẵn ở đây: sheet mở ra là phải có số ngay. Để client gọi
+   * `/recap` cho từng chuyến thì mỗi chuyến kéo theo 7 truy vấn + một lượt
+   * chia tiền — mở sheet với 5 chuyến là 35 truy vấn cho vài dòng chữ.
+   *
+   * Ba truy vấn cố định, không phụ thuộc số chuyến (không N+1).
+   */
+  async listTrips() {
+    const [rows, memberCounts, spending] = await Promise.all([
+      this.db.select().from(trips).orderBy(desc(trips.createdAt)),
+      this.db
+        .select({ tripId: members.tripId, n: sql<number>`count(*)::int` })
+        .from(members)
+        .groupBy(members.tripId),
+      // sum() trên cột bigint trả về numeric → driver đưa ra string, phải Number()
+      this.db
+        .select({ tripId: expenses.tripId, total: sql<string>`sum(${expenses.amount})` })
+        .from(expenses)
+        .groupBy(expenses.tripId)
+    ]);
+
+    const countByTrip = new Map(memberCounts.map((r) => [r.tripId, r.n]));
+    const spentByTrip = new Map(spending.map((r) => [r.tripId, Number(r.total ?? 0)]));
+
+    return rows.map((t) => ({
+      ...t,
+      memberCount: countByTrip.get(t.id) ?? 0,
+      totalSpent: spentByTrip.get(t.id) ?? 0
+    }));
   }
 
   async getTrip(id: number) {

@@ -20,6 +20,15 @@ export interface Trip {
   budgetPerPerson: number | null;
 }
 
+/**
+ * Chuyến đi kèm số liệu tóm tắt — dạng GET /trips trả về.
+ * Chỉ đủ cho sheet đổi chuyến; muốn chi tiết thì gọi /full hoặc /recap.
+ */
+export interface TripSummary extends Trip {
+  memberCount: number;
+  totalSpent: number;
+}
+
 export interface TripEvent {
   id: number;
   tripId: number;
@@ -262,7 +271,7 @@ export const api = {
     body: { message: string; actorZaloId?: string; actorName?: string }
   ) => request<ChatReply>(`/trips/${tripId}/chat`, { method: "POST", body: JSON.stringify(body) }),
 
-  trips: () => request<Trip[]>("/trips"),
+  trips: () => request<TripSummary[]>("/trips"),
   trip: (id: number) => request<Trip>(`/trips/${id}`),
 
   decisions: (tripId: number) => request<Decision[]>(`/trips/${tripId}/decisions`),
@@ -381,13 +390,5 @@ export function recapPageUrl(tripId: number): string {
   return `${BASE.replace(/\/$/, "")}/trips/${tripId}/recap.html`;
 }
 
-/**
- * Chuyến đi đang xem: ưu tiên `?trip=<id>` trên URL (Zino gửi link kèm id),
- * không có thì lấy chuyến mới nhất.
- */
-export async function resolveActiveTrip(): Promise<number | null> {
-  const fromUrl = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("trip");
-  if (fromUrl && Number.isFinite(Number(fromUrl))) return Number(fromUrl);
-  const trips = await api.trips();
-  return trips[0]?.id ?? null;
-}
+// `resolveActiveTrip` đã chuyển sang ./active-trip — nó cần danh sách chuyến đã
+// nhớ sẵn ở đó để kiểm tra id trên URL còn tồn tại không.

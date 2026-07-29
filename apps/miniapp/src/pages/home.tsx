@@ -17,6 +17,7 @@ import { session, type MeResponse } from "../lib/session";
 import { fetchZaloUser, openExternal, type ZaloUser } from "../lib/zalo";
 import { useRecap } from "../lib/use-trip";
 import { countdownLabel, STATUS_LABEL } from "../components/trip-header";
+import { TripSwitcher } from "../components/trip-switcher";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
 import { EmptyState, ErrorState, SectionTitle, SkeletonList } from "../components/states";
@@ -186,7 +187,12 @@ export default function HomePage() {
         </div>
         <CardContent className="space-y-3 py-3.5">
           <div>
-            <h2 className="text-lg font-bold leading-tight">{trip.name}</h2>
+            {/* Trang chủ không dùng TripHeader (thẻ này giàu thông tin hơn), nên
+                lối đổi chuyến phải gắn riêng vào đây — nếu không thì đúng cái
+                tab người ta mở đầu tiên lại là tab duy nhất không đổi được. */}
+            <TripSwitcher currentTripId={trip.id}>
+              <h2 className="truncate text-lg font-bold leading-tight">{trip.name}</h2>
+            </TripSwitcher>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {trip.destination} · {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
             </p>

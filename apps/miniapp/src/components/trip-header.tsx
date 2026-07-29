@@ -2,6 +2,7 @@ import { CalendarDays, MapPin } from "lucide-react";
 import type { Trip } from "../lib/api";
 import { daysUntil } from "../lib/use-trip";
 import { formatDate } from "../lib/utils";
+import { TripSwitcher } from "./trip-switcher";
 import { Badge } from "./ui/badge";
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -26,13 +27,18 @@ export function countdownLabel(trip: Trip, now: Date = new Date()): string {
  * Thanh ngữ cảnh chuyến đi, đặt trên đầu mọi tab.
  * Nhóm có thể đi nhiều chuyến; không có dòng này thì người dùng không biết
  * bảng chi tiêu đang là của chuyến nào.
+ *
+ * Tên chuyến đồng thời là nút đổi chuyến (xem `TripSwitcher`) — chỉ mọc mũi tên
+ * khi nhóm có từ hai chuyến trở lên.
  */
 export function TripHeader({ trip }: { trip: Trip }) {
   return (
     <header className="rounded-lg border border-border bg-card p-3.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="truncate text-base font-bold">{trip.name}</h1>
+          <TripSwitcher currentTripId={trip.id}>
+            <h1 className="truncate text-base font-bold">{trip.name}</h1>
+          </TripSwitcher>
           <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
             <MapPin size={12} className="shrink-0" />
             {trip.destination}
