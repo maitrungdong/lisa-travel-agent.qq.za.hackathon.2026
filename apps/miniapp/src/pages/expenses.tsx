@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ArrowRight, Lock, Plus, QrCode, Receipt } from "lucide-react";
 import { api, type Expense } from "../lib/api";
-import { currentActor, setActor, type Actor } from "../lib/actor";
+import { currentActor, setActor } from "../lib/actor";
 import { parsePaymentQr, suggestTitle } from "../lib/qr";
 import { scanQr } from "../lib/zalo";
 import { ExpenseForm } from "../components/expense-form";
@@ -31,7 +31,13 @@ const CATEGORY_ICON: Record<string, string> = {
  */
 export default function ExpensesPage() {
   const { data, loading, error, isEmpty, reload } = useRecap();
-  const [actor, setActorState] = useState<Actor | null>(currentActor);
+  // Tính lại theo chuyến đang mở thay vì giữ trong state — xem lib/actor.ts.
+  // Màn này không mount lại khi đổi chuyến nên state sẽ giữ actor của chuyến cũ.
+  const [actorTick, bumpActor] = useReducer((n: number) => n + 1, 0);
+  const actor = useMemo(
+    () => (data ? currentActor(data.trip.id, data.members) : null),
+    [data, actorTick]
+  );
   const [form, setForm] = useState<{ open: boolean; editing: Expense | null }>({
     open: false,
     editing: null
@@ -352,13 +358,12 @@ export default function ExpensesPage() {
                   key={m.zaloUserId}
                   type="button"
                   onClick={() => {
-                    const a = {
+                    setActor(data.trip.id, {
                       zaloUserId: m.zaloUserId,
                       displayName: m.displayName,
                       role: m.role
-                    };
-                    setActor(a);
-                    setActorState(a);
+                    });
+                    bumpActor();
                   }}
                   className="rounded-full bg-muted px-3 py-2 text-sm font-medium"
                 >

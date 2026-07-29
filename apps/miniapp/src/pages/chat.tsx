@@ -66,7 +66,7 @@ export default function ChatPage() {
     setTurns((t) => [...t, { role: "user", text }]);
     setBusy(true);
     try {
-      const actor = currentActor();
+      const actor = currentActor(tripId, data?.members);
       const r: ChatReply = await api.chat(tripId, {
         message: text,
         actorZaloId: actor?.zaloUserId,

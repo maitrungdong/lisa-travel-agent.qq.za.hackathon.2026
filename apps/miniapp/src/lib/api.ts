@@ -1,3 +1,5 @@
+import { errorMessage } from "./api-error";
+
 // Client gọi backend BFF. Base URL inject lúc build (VITE_API_BASE_URL).
 const BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -6,7 +8,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json" },
     ...init
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  // Giữ nguyên câu server nói vì sao từ chối, đừng thu về mỗi mã số.
+  if (!res.ok) throw new Error(await errorMessage(res, path));
   return res.json() as Promise<T>;
 }
 

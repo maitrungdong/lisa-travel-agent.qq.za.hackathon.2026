@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import { api, type Decision, type Member } from "../lib/api";
 import { currentActor, isOrganizer, setActor, type Actor } from "../lib/actor";
@@ -19,22 +19,43 @@ import { formatVnd } from "../lib/utils";
  * lo nhất và cũng là lúc dễ mất niềm tin nhất.
  */
 export function DecisionCard({
+  tripId,
   decision,
   members,
   onChanged
 }: {
+  /** Cần vì actor lưu THEO TỪNG CHUYẾN — xem lib/actor.ts */
+  tripId: number;
   decision: Decision;
   members: Member[];
   onChanged: (d: Decision) => void;
 }) {
-  const [actor, setActorState] = useState<Actor | null>(currentActor);
+  // Tính lại mỗi lần đổi chuyến, KHÔNG giữ trong useState.
+  //
+  // Thẻ này nằm cùng một vị trí trong cây React ở mọi chuyến, nên đổi chuyến
+  // không làm component mount lại — hàm khởi tạo của useState sẽ không chạy lần
+  // hai và actor của chuyến cũ kẹt lại. `actorTick` chỉ để ép đọc lại
+  // localStorage ngay sau khi người dùng vừa chọn tên.
+  const [actorTick, bumpActor] = useReducer((n: number) => n + 1, 0);
+  const actor = useMemo(
+    () => currentActor(tripId, members),
+    [tripId, members, actorTick]
+  );
   const [busy, setBusy] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Chưa biết mình là ai thì không bầu được — hỏi trước, một lần.
   if (!actor) {
-    return <WhoAreYou members={members} onPick={(a) => { setActor(a); setActorState(a); }} />;
+    return (
+      <WhoAreYou
+        members={members}
+        onPick={(a) => {
+          setActor(tripId, a);
+          bumpActor();
+        }}
+      />
+    );
   }
 
   const myVote = decision.options.find((o) => o.voterNames.includes(actor.displayName));
@@ -172,11 +193,20 @@ export function DecisionCard({
               Chốt phương án
             </button>
           )}
-          {!isOrganizer(actor) && (
-            <p className="text-center text-[11px] text-muted-foreground">
-              Người tổ chức là người bấm chốt
-            </p>
-          )}
+          {/* Chuyến do bot tạo có thể KHÔNG có ai là organizer. Lúc đó câu
+              "người tổ chức là người bấm chốt" thành ngõ cụt: chờ một người
+              không tồn tại. Nói thẳng ra và chỉ đường xử lý. */}
+          {!isOrganizer(actor) &&
+            (members.some((m) => m.role === "organizer") ? (
+              <p className="text-center text-[11px] text-muted-foreground">
+                {members.find((m) => m.role === "organizer")?.displayName} là người bấm chốt
+              </p>
+            ) : (
+              <p className="rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+                Chuyến này chưa có người tổ chức nên chưa ai chốt được. Nhắn “@Zino đặt tôi làm
+                người tổ chức” trong nhóm Zalo.
+              </p>
+            ))}
         </CardContent>
       </Card>
 

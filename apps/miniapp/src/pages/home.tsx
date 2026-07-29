@@ -249,6 +249,7 @@ export default function HomePage() {
           Đặt ngay dưới thẻ chuyến đi: mở app ra là thấy việc cần làm. */}
       {decision && (decision.status === "open" || decision.status === "tie") && (
         <DecisionCard
+          tripId={trip.id}
           decision={decision}
           members={data.members}
           onChanged={(d) => setDecision(d.status === "decided" ? null : d)}
