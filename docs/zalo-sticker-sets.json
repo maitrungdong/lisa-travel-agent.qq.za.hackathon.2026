@@ -1,37 +1,69 @@
 {
   "_readme": [
-    "Danh mục bộ sticker Zalo — cào từ stickers.zaloapp.com ngày 30/07/2026.",
+    "Danh mục sticker Zalo — cào từ stickers.zaloapp.com bằng trình duyệt thật, 30/07/2026.",
     "",
-    "⚠ GIỚI HẠN QUAN TRỌNG: đây là ID của BỘ (set), KHÔNG phải ID từng sticker.",
-    "Trang detail render danh sách sticker bằng JavaScript nên fetch tĩnh không",
-    "lấy được ID lẻ. `sendSticker` của Bot API cần ID sticker LẺ.",
+    "MỖI STICKER CÓ HAI ID, chưa rõ Bot API `sendSticker` nhận cái nào:",
+    "  • hex_id  — chuỗi hex trang store ghi rõ 'ID:' dưới từng sticker",
+    "  • num_id  — số trong URL ảnh (eid nội bộ), liền dãy theo bộ",
     "",
-    "Hai đường lấy ID lẻ đã xác minh được về mặt cơ chế:",
-    "  1. Webhook: người dùng gửi sticker cho bot → `message.sticker` trong",
-    "     payload chính là ID dùng lại được cho sendSticker. Đây là nguồn DUY",
-    "     NHẤT chắc chắn đúng định dạng Bot API chấp nhận.",
-    "  2. Chrome: mở trang detail bằng trình duyệt thật, đọc DOM lấy eid từng",
-    "     sticker. ⚠ CHƯA XÁC MINH eid của store có trùng hệ ID mà sendSticker",
-    "     nhận hay không — phải test một phát trước khi tin.",
+    "⚠ PHẢI XÁC MINH trước khi dùng: deploy xong, nhắn vào nhóm test:",
+    "    $$send_sticker fd81daafe6ea0fb456fb   (thử hex)",
+    "    $$send_sticker 50347                  (thử số)",
+    "Cái nào làm bot gửi được sticker thật thì toàn bộ ID cùng loại dùng được.",
+    "Zalo từ chối ID sai một cách IM LẶNG — không thấy sticker = ID sai loại.",
+    "Nguồn đối chứng thứ ba: gửi sticker cho bot, log in 'Sticker nhận được: <id>',",
+    "so định dạng với hai loại trên.",
     "",
-    "Cách dùng bộ: mở `zalo_me_link` trên điện thoại → tải bộ về Zalo → gửi",
-    "một sticker vào nhóm test → lấy ID từ webhook."
+    "Bộ Zapy Công Sở đã gán nhãn 9/24 (nhìn từ ảnh chụp). Các bộ khác chỉ có",
+    "dải num_id; cần hex thì mở trang cid tương ứng và đọc chữ 'ID:' dưới sticker."
   ],
   "scraped_at": "2026-07-30",
-  "source": "https://stickers.zaloapp.com/oa/detail",
+  "recommended_for_zino": {
+    "thinking": { "hex_id": "fd81daafe6ea0fb456fb", "num_id": "50347", "why": "Zapy ngồi thiền — hợp lúc deep_plan chạy 1-2 phút" },
+    "done_ok": { "hex_id": "a643836dbf2856760f39", "num_id": "50345", "why": "Zapy giơ ngón cái — hợp lúc chốt xong quyết định" },
+    "thanks": { "hex_id": "d063f44dc80821567819", "num_id": "50344", "why": "Zapy ôm tim — hợp lúc được cảm ơn" }
+  },
   "sets": [
-    { "cid": "743df4e6c8a321fd78b2", "set_id": 12556, "name": "Zapy Công Sở", "count": 24, "zalo_me_link": "https://zalo.me/qr/jp/yfxsibokuv", "thumb": "https://zalo-api.zadn.vn/d/c/d/3/f/12556/icon_pre/zapycongso_thumb.png" },
-    { "cid": "5082f258ce1d27437e0c", "set_id": 12334, "name": "Hổ Béo Hằng Ngày 01", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/vywbdzox0f", "thumb": "https://zalo-api.zadn.vn/1/2/0/7/0/12334/icon_pre/hobeohangngay01_thumb.png" },
-    { "cid": "4662eaa7d6e23fbc66f3", "set_id": 12064, "name": "Truyện Cổ Remix", "count": 15, "zalo_me_link": "https://zalo.me/qr/jp/qzkhfstv5x", "thumb": "https://zalo-api.zadn.vn/a/1/5/9/b/12064/icon_pre/truyencoremix_thumb.png" },
-    { "cid": "b3fe223b1e7ef720ae6f", "set_id": 12061, "name": "I Am Binie", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/af2au1rud4", "thumb": "https://zalo-api.zadn.vn/2/5/d/0/a/12061/icon_pre/iambinie_thumb.png" },
-    { "cid": "6f1c41d87d9d94c3cd8c", "set_id": 11938, "name": "Moca Chó Điên", "count": 20, "zalo_me_link": "https://zalo.me/qr/jp/bwdy9ha1xe", "thumb": "https://zalo-api.zadn.vn/6/b/0/6/1/11938/icon_pre/mocachodien_thumb.png" },
-    { "cid": "c3093dca018fe8d1b19e", "set_id": 10610, "name": "Ogu Mỏ Vịt", "count": 20, "zalo_me_link": "https://zalo.me/qr/jp/sd22vcwzmk", "thumb": "https://zalo-api.zadn.vn/5/b/7/0/8/10610/icon_pre/movit_thumb.png" },
-    { "cid": "98ec892eb56b5c35057a", "set_id": 10397, "name": "Quỳnh Aka Nghỉ Lễ", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/t4shieuaas", "thumb": "https://zalo-api.zadn.vn/7/6/8/8/d/10397/icon_pre/aka_thumb.png" },
-    { "cid": "ca7873ba4fffa6a1ffee", "set_id": 10293, "name": "Quỳnh Aka 2", "count": 16, "zalo_me_link": "https://zalo.me/qr/jp/fjygu0njfh", "thumb": "https://zalo-api.zadn.vn/3/7/f/2/f/10293/icon_pre/aka_thumb.png" },
-    { "cid": "3883b7418b04625a3b15", "set_id": 10243, "name": "Rồng Vàng Voice", "count": 13, "zalo_me_link": "https://zalo.me/qr/jp/aduylsv2t5", "thumb": "https://zalo-api.zadn.vn/a/5/6/e/e/10243/icon_pre/rongvoice_thumb.png" }
-  ],
-  "captured_sticker_ids": {
-    "_note": "Điền dần khi bắt được từ webhook: { \"id\": \"...\", \"set\": \"...\", \"mô_tả\": \"vd cười, chờ đợi, ăn mừng\" }",
-    "ids": []
-  }
+    {
+      "cid": "743df4e6c8a321fd78b2",
+      "set_id": 12556,
+      "name": "Zapy Công Sở",
+      "count": 24,
+      "zalo_me_link": "https://zalo.me/qr/jp/yfxsibokuv",
+      "stickers": [
+        { "num_id": "50344", "hex_id": "d063f44dc80821567819", "label": "ôm trái tim, thả tim — cảm ơn/quý mến" },
+        { "num_id": "50345", "hex_id": "a643836dbf2856760f39", "label": "giơ ngón cái lấp lánh — OK/chốt" },
+        { "num_id": "50346", "hex_id": "7722510c6d498417dd58", "label": "uống trà sữa — chill/thư giãn" },
+        { "num_id": "50347", "hex_id": "fd81daafe6ea0fb456fb", "label": "ngồi thiền hào quang — bình tĩnh chờ/đang xử lý" },
+        { "num_id": "50348", "hex_id": "7eb25e9c62d98b87d2c8", "label": "khóc trước bia mộ RIP — mệt/thua cuộc" },
+        { "num_id": "50349", "hex_id": "e136c018fc5d15034c4c", "label": "ỦA — ngạc nhiên/bối rối" },
+        { "num_id": "50350", "hex_id": "611743397f7c9622cf6d", "label": "Xu cà na — xui xẻo" },
+        { "num_id": "50351", "hex_id": "095c2a721637ff69a626", "label": "Ét ô ét (SOS) — cầu cứu" },
+        { "num_id": "50352", "hex_id": "98ffa4d1989471ca2885", "label": "Sét đánh ngang tai — sốc" },
+        { "num_id": "50353", "hex_id": "7b31461f7a5a9304ca4b", "label": null },
+        { "num_id": "50354", "hex_id": "34900abe36fbdfa586ea", "label": null },
+        { "num_id": "50355", "hex_id": "64985bb667f38eadd7e2", "label": null },
+        { "num_id": "50356", "hex_id": "c91bf135cd70242e7d61", "label": null },
+        { "num_id": "50357", "hex_id": "c468fd46c103285d7112", "label": null },
+        { "num_id": "50358", "hex_id": "ae05942ba86e4130187f", "label": null },
+        { "num_id": "50359", "hex_id": "8fdbb4f588b061ee38a1", "label": null },
+        { "num_id": "50360", "hex_id": "5d62694c5509bc57e518", "label": null },
+        { "num_id": "50361", "hex_id": "8430b11e8d5b64053d4a", "label": null },
+        { "num_id": "50362", "hex_id": "a4689246ae03475d1e12", "label": null },
+        { "num_id": "50363", "hex_id": "0fcd38e304a6edf8b4b7", "label": null },
+        { "num_id": "50364", "hex_id": "d1b2e19cddd934876dc8", "label": null },
+        { "num_id": "50365", "hex_id": "528a63a45fe1b6bfeff0", "label": null },
+        { "num_id": "50366", "hex_id": "0d1e3f300375ea2bb364", "label": null },
+        { "num_id": "50367", "hex_id": "4fa37c8d40c8a996f0d9", "label": null }
+      ]
+    },
+    { "cid": "5082f258ce1d27437e0c", "set_id": 12334, "name": "Hổ Béo Hằng Ngày 01", "count": 16, "num_id_range": "49774-49789", "zalo_me_link": "https://zalo.me/qr/jp/vywbdzox0f" },
+    { "cid": "4662eaa7d6e23fbc66f3", "set_id": 12064, "name": "Truyện Cổ Remix", "count": 15, "num_id_range": "47928-47942", "zalo_me_link": "https://zalo.me/qr/jp/qzkhfstv5x" },
+    { "cid": "b3fe223b1e7ef720ae6f", "set_id": 12061, "name": "I Am Binie", "count": 16, "num_id_range": "47884-47899", "zalo_me_link": "https://zalo.me/qr/jp/af2au1rud4" },
+    { "cid": "6f1c41d87d9d94c3cd8c", "set_id": 11938, "name": "Moca Chó Điên", "count": 20, "num_id_range": "45897-45916", "zalo_me_link": "https://zalo.me/qr/jp/bwdy9ha1xe" },
+    { "cid": "c3093dca018fe8d1b19e", "set_id": 10610, "name": "Ogu Mỏ Vịt", "count": 20, "num_id_range": "25708-25727", "zalo_me_link": "https://zalo.me/qr/jp/sd22vcwzmk" },
+    { "cid": "98ec892eb56b5c35057a", "set_id": 10397, "name": "Quỳnh Aka Nghỉ Lễ", "count": 16, "num_id_range": "23021-23036", "zalo_me_link": "https://zalo.me/qr/jp/t4shieuaas" },
+    { "cid": "ca7873ba4fffa6a1ffee", "set_id": 10293, "name": "Quỳnh Aka 2", "count": 16, "num_id_range": "21271-21286", "zalo_me_link": "https://zalo.me/qr/jp/fjygu0njfh" },
+    { "cid": "3883b7418b04625a3b15", "set_id": 10243, "name": "Rồng Vàng Voice", "count": 13, "num_id_range": "20088-20100", "zalo_me_link": "https://zalo.me/qr/jp/aduylsv2t5" }
+  ]
 }
