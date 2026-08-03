@@ -13,7 +13,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.18.0",
-    "zmp-sdk": "^2.51.0"
+    "zmp-sdk": "^2.52.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
